@@ -8,7 +8,8 @@ My personal collection of custom Claude Code slash commands and workflows.
 claude-code-commands/
 ├── commands/           # Custom slash commands
 │   ├── todo.md        # Intelligent task management system
-│   └── iterative-review.md  # Multi-perspective iterative review
+│   ├── iterative-review.md  # Multi-perspective iterative review
+│   └── i18n-check.md  # Comprehensive i18n status check
 ├── docs/              # Documentation
 └── scripts/           # Utility scripts
 ```
@@ -23,6 +24,7 @@ Copy commands to your Claude Code commands directory:
 # Copy individual commands
 cp commands/todo.md ~/.claude/commands/
 cp commands/iterative-review.md ~/.claude/commands/
+cp commands/i18n-check.md ~/.claude/commands/
 ```
 
 ### Using Symlinks (Recommended for development)
@@ -33,6 +35,7 @@ Create symlinks to keep commands in sync with this repository:
 # Create symlinks
 ln -sf ~/projects/claude-code-commands/commands/todo.md ~/.claude/commands/todo.md
 ln -sf ~/projects/claude-code-commands/commands/iterative-review.md ~/.claude/commands/iterative-review.md
+ln -sf ~/projects/claude-code-commands/commands/i18n-check.md ~/.claude/commands/i18n-check.md
 ```
 
 ## 📚 Available Commands
@@ -73,6 +76,27 @@ Iterative code review with multiple security, performance, and maintainability p
 - Performance optimization review
 - Maintainability assessment
 - Multiple review rounds for deep analysis
+
+### `/i18n-check` - Internationalization Status Check
+
+Comprehensive internationalization (i18n) status check for any project with coverage, consistency, and cultural sensitivity analysis.
+
+**Usage:**
+```bash
+/i18n-check [language-code]
+/i18n-check ja --coverage
+/i18n-check en --consistency
+/i18n-check --format
+/i18n-check --cultural
+/i18n-check --complete
+```
+
+**Features:**
+- Translation coverage analysis across all supported languages
+- Consistency checking for translation keys and formats
+- Format validation (placeholders, variables, HTML tags)
+- Cultural sensitivity and locale-specific content review
+- Complete internationalization audit across entire codebase
 
 ## 🔄 Keeping Commands Updated
 
