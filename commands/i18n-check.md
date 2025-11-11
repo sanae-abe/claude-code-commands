@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TodoWrite, AskUserQuestion, Task
-argument-hint: [language-code] [--coverage|--consistency|--format|--cultural|--complete]
+argument-hint: "[language-code] [--coverage|--consistency|--format|--cultural|--complete]"
 description: Comprehensive internationalization (i18n) status check for any project
 model: sonnet
 ---
@@ -12,10 +12,10 @@ Comprehensive internationalization (i18n) status check for any project.
 Usage: `/i18n-check [language-code] [options]`
 
 Examples:
-- `/i18n-check` (全言語完全性チェック)
-- `/i18n-check --coverage` (カバレッジ重点分析)
-- `/i18n-check ja --consistency` (日本語用語統一性チェック)
-- `/i18n-check --cultural --detailed` (文化適応性詳細レビュー)
+- `/i18n-check` (Full completeness check for all languages)
+- `/i18n-check --coverage` (Coverage-focused analysis)
+- `/i18n-check ja --consistency` (Japanese terminology consistency check)
+- `/i18n-check --cultural --detailed` (Detailed cultural adaptation review)
 
 ## Current i18n Project State
 
@@ -27,21 +27,21 @@ Examples:
 
 ## Execution Flow
 
-### 1. 初期診断とチェック戦略決定
-**TodoWrite必須使用**:
-1. i18nプロジェクト構造の自動解析
-2. 翻訳ファイル形式・フレームワーク検出
-3. 対話的チェック戦略の選択
-4. 段階的チェックと結果整理
+### 1. Initial Diagnosis and Check Strategy Decision
+**TodoWrite required**:
+1. Automatic analysis of i18n project structure
+2. Translation file format and framework detection
+3. Interactive check strategy selection
+4. Incremental checking and result organization
 
-### 2. チェック範囲判定
-**チェック対象から自動判定**:
-- 🔥 **緊急**: リリース前の完全性確認
-- ⚡ **重要**: 新言語追加・大規模更新後
-- 🎯 **定期**: 週次・月次メンテナンス
-- 🔍 **包括的**: 全言語全観点チェック
+### 2. Check Scope Determination
+**Auto-determined from check target**:
+- 🔥 **Urgent**: Pre-release completeness verification
+- ⚡ **Important**: After new language addition or major updates
+- 🎯 **Periodic**: Weekly/monthly maintenance
+- 🔍 **Comprehensive**: All languages, all perspectives check
 
-### 📊 自動i18n診断
+### 📊 Automated i18n Diagnosis
 
 **Automated i18n project analysis:**
 ```bash
@@ -83,56 +83,56 @@ git log --since="1 month ago" --name-only --pretty=format: | grep -E "(locales|i
 
 ## Interactive i18n Check Management (AskUserQuestion Integration)
 
-### Primary Question: チェック範囲選択
+### Primary Question: Check Scope Selection
 ```typescript
 AskUserQuestion({
   questions: [{
-    question: "i18nチェックの範囲と重点を選択してください",
-    header: "チェック範囲",
+    question: "Please select the scope and focus of the i18n check",
+    header: "Check Scope",
     multiSelect: true,
     options: [
       {
         label: "completeness",
-        description: "翻訳の完全性（欠落キー検出・カバレッジ計算）"
+        description: "Translation completeness (missing key detection, coverage calculation)"
       },
       {
         label: "consistency",
-        description: "用語統一性（同一概念の訳語統一・矛盾検出）"
+        description: "Terminology consistency (unified translation of same concepts, inconsistency detection)"
       },
       {
         label: "format",
-        description: "技術品質（プレースホルダー検証・エンコーディング）"
+        description: "Technical quality (placeholder validation, encoding)"
       },
       {
         label: "cultural",
-        description: "文化適応性（言語適切性・日時形式・慣用句）"
+        description: "Cultural adaptation (language appropriateness, date/time formats, idioms)"
       },
       {
         label: "documentation",
-        description: "ドキュメント翻訳（README・ガイド・例文）"
+        description: "Documentation translation (README, guides, examples)"
       },
       {
         label: "complete",
-        description: "全観点包括チェック（時間がかかります）"
+        description: "All-perspective comprehensive check (takes time)"
       }
     ]
   }]
 })
 ```
 
-### Secondary Question: 対象言語選択
+### Secondary Question: Target Language Selection
 ```typescript
 AskUserQuestion({
   questions: [{
-    question: "チェック対象の言語を選択してください（空白で全言語）",
-    header: "対象言語",
+    question: "Select languages to check (leave blank for all languages)",
+    header: "Target Languages",
     multiSelect: true,
     options: [
-      { label: "all", description: "全言語（全サポート言語を対象）" },
-      { label: "en", description: "English（英語）" },
-      { label: "ja", description: "日本語（Japanese）" },
-      { label: "zh-CN", description: "简体中文（中国語簡体字）" },
-      { label: "zh-TW", description: "繁體中文（中国語繁体字）" }
+      { label: "all", description: "All languages (all supported languages)" },
+      { label: "en", description: "English" },
+      { label: "ja", description: "Japanese (日本語)" },
+      { label: "zh-CN", description: "Simplified Chinese (简体中文)" },
+      { label: "zh-TW", description: "Traditional Chinese (繁體中文)" }
     ]
   }]
 })
@@ -166,7 +166,7 @@ for lang_file in locales/*/common.json i18n/*/common.json; do
 done
 ```
 
-**分析項目:**
+**Analysis items:**
 - Extract all message keys from translation files
 - Compare keys across all supported languages
 - Report missing translations per language
@@ -189,7 +189,7 @@ echo "⚠️ Ambiguous Translation Detection:"
 # (requires custom script based on project structure)
 ```
 
-**分析項目:**
+**Analysis items:**
 - Check for inconsistent translations of same concept
 - Verify technical terms are translated consistently
 - Flag ambiguous or conflicting translations
@@ -209,7 +209,7 @@ grep -r "format.*number\|format.*currency" locales/ i18n/ 2>/dev/null | head -3
 # (language-specific logic needed)
 ```
 
-**分析項目:**
+**Analysis items:**
 - Review formal vs informal language choices
 - Check idioms and metaphors are culturally adapted
 - Verify date/time/number formats are locale-appropriate
@@ -235,7 +235,7 @@ find locales/ i18n/ -name "*.json" -exec file {} \; | grep -v "UTF-8" || echo "�
 echo "⚠️ Language switching test required (manual)"
 ```
 
-**分析項目:**
+**Analysis items:**
 - Validate placeholder syntax ({0}, {1}, etc.) preserved
 - Check for hardcoded user-facing strings
 - Verify UTF-8 encoding throughout
@@ -262,7 +262,7 @@ find docs/ -name "*.md" 2>/dev/null | grep -E "(en|ja|zh)" | head -5
 grep -r "```" docs/ 2>/dev/null | wc -l | sed 's/^/Code examples: /'
 ```
 
-**分析項目:**
+**Analysis items:**
 - Check README files for all languages
 - Verify user guides are translated
 - Validate code examples work for all locales
@@ -296,14 +296,14 @@ git status >/dev/null 2>&1 && echo "✅ Git repository detected" || echo "⚠️
 ```typescript
 AskUserQuestion({
   questions: [{
-    question: "翻訳ファイルが見つかりません。どうしますか？",
-    header: "ファイル検出",
+    question: "Translation files not found. What would you like to do?",
+    header: "File Detection",
     multiSelect: false,
     options: [
-      { label: "auto-detect", description: "非標準構造を自動検出" },
-      { label: "manual-specify", description: "ファイルパスを手動指定" },
-      { label: "create-structure", description: "標準的なi18n構造を作成" },
-      { label: "cancel", description: "チェックをキャンセル" }
+      { label: "auto-detect", description: "Auto-detect non-standard structure" },
+      { label: "manual-specify", description: "Manually specify file paths" },
+      { label: "create-structure", description: "Create standard i18n structure" },
+      { label: "cancel", description: "Cancel check" }
     ]
   }]
 })
@@ -363,7 +363,7 @@ Generate a detailed report in this format:
 ### 🌏 Cultural Appropriateness
 - ✅ Date formats: Properly localized (en: MM/DD/YYYY, ja: YYYY年MM月DD日)
 - ✅ Number formats: Correct decimal/thousand separators
-- ⚠️ Formal language: Mixed formal/informal in ja (要統一)
+- ⚠️ Formal language: Mixed formal/informal in ja (needs unification)
 - ❌ Idioms: English idiom "piece of cake" literally translated in zh-CN
 
 ### 🔧 Technical Quality
@@ -478,39 +478,6 @@ echo "  /mr 'i18n: complete missing translations and fix inconsistencies'"
 - **Technical quality**: Encoding, placeholder, hardcoded string checks
 - **Documentation sync**: Translation documentation completeness
 
-## 🎓 学習記録推奨タイミング
-
-### Auto-trigger Conditions
-- **Large-scale i18n issues discovered**: 複数言語で重大な問題発見時
-- **New i18n framework migration**: フレームワーク移行時
-- **Multi-language support expansion**: 新言語追加時
-- **Terminology standardization breakthrough**: 用語統一の画期的手法発見時
-
-### Learning Record Template
-```markdown
-## i18n Check: [Date] [Project/Language]
-
-**Check Scope**: [completeness/consistency/cultural/complete]
-**Languages Analyzed**: [en/ja/zh-CN/zh-TW/etc.]
-**Total Keys**: [Number]
-**Issues Found**: [Number and types]
-**Key Improvements**: [Specific improvements achieved]
-**Challenges Overcome**: [Problems and solutions]
-**Best Practices Discovered**: [New i18n techniques]
-**Future Recommendations**: [Suggestions for maintenance]
-
-### Metrics
-- Translation coverage: [X]% average
-- Consistency score: [X]/10
-- Technical quality: [X] issues resolved
-- Documentation sync: [X]% complete
-
-### Tools & Techniques Used
-- [Effective i18n analysis methods]
-- [Automation scripts]
-- [Manual review processes]
-```
-
 ## Key Features Summary
 
 ### ✅ Implemented Core Features
@@ -533,12 +500,12 @@ echo "  /mr 'i18n: complete missing translations and fix inconsistencies'"
 
 ## Execution Start
 
-**🎯 目標**: プロジェクトの全i18n状況を包括的に分析し、翻訳品質・完全性・文化適応性を効率的に確認する自動化システムの実現
+**🎯 Goal**: Achieve automated system for comprehensive analysis of all project i18n status, efficiently checking translation quality, completeness, and cultural adaptation
 
-引数: "{{args:arguments}}"
+Arguments: "{{args:arguments}}"
 
-引数をパースしてチェック範囲と対象言語を特定し、プロジェクトのi18n構造を自動検出します。
+Parse arguments to identify check scope and target languages, auto-detect project i18n structure.
 
-## 🚀 i18nチェック実行
+## 🚀 i18n Check Execution
 
-現在のプロジェクトi18n構造を分析し、適切な専門エージェントを起動して包括的なi18nチェックを行います。
+Analyze current project i18n structure and launch appropriate specialized agents for comprehensive i18n check.

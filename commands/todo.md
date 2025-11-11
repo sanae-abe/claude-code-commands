@@ -1,244 +1,94 @@
 ---
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, TodoWrite, Grep, Glob
-argument-hint: [action] [description] | add | complete | list | sync | project | interactive
-description: インテリジェント開発統合todo管理システム（Git連携・対話的UI対応）
+argument-hint: "[action] [description] | add | complete | list | sync | project | interactive"
+description: Simple project task management with interactive UI and priority handling
 model: sonnet
 ---
 
-# インテリジェント開発統合Todo Manager
+# Todo Manager
 
-Git連携・対話的UI対応の高度なタスク管理: **$ARGUMENTS**
+Interactive project task management: **$ARGUMENTS**
 
-## 🚀 クイックスタート
+## 🚀 Quick Start
 
 ```bash
-# 基本操作（実装済み）
-/todo                           # インタラクティブモード
-/todo add "Fix bug"             # タスク追加
-/todo list                      # タスク一覧表示
-/todo complete 1                # タスク完了（エイリアス: done）
+# Basic operations
+/todo                           # Interactive mode
+/todo add "Fix bug"             # Add task
+/todo list                      # List all tasks
+/todo complete 1                # Complete task (alias: done)
 
-# 優先度・コンテキスト指定
+# Priority & context specification
 /todo add "Fix auth timeout" --priority high --context api
 
-# 日付指定（ISO 8601形式）
+# Date specification
 /todo add "Update docs" --due 2025-01-15
 /todo add "Review PR" --due tomorrow
 
-# フィルタリング・ソート
+# Filtering & sorting
 /todo list --filter priority:high
 /todo list --sort due
 ```
 
 ---
 
-## 📋 実装済み機能
+## 📋 Basic Commands
 
-### 基本コマンド
+### `add "description" [options]`
+Create a new task.
 
-#### `add "description" [options]`
-タスクを新規作成します。
+**Options**:
+- `--priority <level>`: Priority level (critical|high|medium|low)
+- `--context <type>`: Context type (ui|api|docs|test|build|security)
+- `--due <date>`: Due date (YYYY-MM-DD or tomorrow, next week, etc.)
 
-**オプション**:
-- `--priority <level>`: 優先度（critical|high|medium|low）
-- `--context <type>`: コンテキスト（ui|api|docs|test|build|security）
-- `--due <date>`: 期限（YYYY-MM-DD または tomorrow, next week 等）
-
-**例**:
+**Examples**:
 ```bash
 /todo add "Fix authentication timeout" --priority high --context api
 /todo add "Update documentation" --due 2025-01-20
 /todo add "Refactor component" --priority medium --context ui --due next week
 ```
 
-#### `complete N` / `done N`
-タスクを完了します（エイリアス: `complete`, `done`）。
+### `complete N` / `done N`
+Complete a task (aliases: `complete`, `done`).
 
-**例**:
+**Examples**:
 ```bash
 /todo complete 1
 /todo done 3
 ```
 
-#### `list [options]`
-タスク一覧を表示します。
+### `list [options]`
+Display task list.
 
-**オプション**:
-- `--filter <condition>`: フィルタリング（例: `priority:high`, `context:ui`）
-- `--sort <field>`: ソート（`due`, `priority`）
+**Options**:
+- `--filter <condition>`: Filter tasks (e.g., `priority:high`, `context:ui`)
+- `--sort <field>`: Sort tasks (`due`, `priority`)
 
-**例**:
+**Examples**:
 ```bash
-/todo list                      # 全タスク表示
+/todo list                      # Show all tasks
 /todo list --filter priority:high
 /todo list --sort due
 ```
 
-#### その他のコマンド
-- `remove N` / `delete N` - タスク削除
-- `undo N` - 完了タスクを未完了に戻す
-- `past due` - 期限切れタスクの表示
-- `next` - 次の優先タスクの表示（期限・優先度考慮）
-
----
-
-## 🔮 実験的機能（Phase 2 - 未実装）
-
-⚠️ **注意**: 以下の機能は現在開発中で、まだ利用できません。
-
-### Git統合機能（未実装）
-- `sync --git` - Git状態との双方向同期
-- `branch [branch-name]` - ブランチ関連タスク管理
-- `project --overview | --stats` - プロジェクト分析
-
-### コマンド統合（未実装）
-- `integrate --debug [issue]` - `/debug`コマンドとの連携
-- `integrate --commit [message]` - `/commit`コマンドとの連携
-- `integrate --serena [problem]` - `/serena`コマンドとの連携
-
-### 分析機能（未実装）
-- `analyze --productivity` - 完了パターン分析
-- `dashboard` - リッチ表示ダッシュボード
-- `suggest --next` - 次のタスク推奨
-
----
-
-## 🛠️ 実装ガイド（開発者向け）
-
-### Current Project Context (Git Integration)
-
-**セキュリティ強化版**:
-```bash
-# Git操作のキャッシング（パフォーマンス最適化）
-if [[ -z "$GIT_CONTEXT_CACHED" ]]; then
-    export GIT_STATUS=$(git status --porcelain 2>/dev/null | head -5 || echo "No git repo")
-    export GIT_BRANCH=$(git branch --show-current 2>/dev/null || echo "No git branch")
-    export GIT_COMMITS=$(git log --oneline -3 2>/dev/null || echo "No commit history")
-    export GIT_CONTEXT_CACHED=1
-fi
-
-# プロジェクトルート検出（最適化版・セキュリティ強化）
-detect_project_root() {
-    # 段階的検索（早期終了最適化）
-    for depth in 1 2 3; do
-        result=$(find . -P -maxdepth $depth \( -name "package.json" -o -name "Cargo.toml" -o -name "requirements.txt" \) -type f 2>/dev/null | head -1)
-        if [[ -n "$result" ]]; then
-            dirname "$result"
-            return 0
-        fi
-    done
-    pwd
-}
-
-PROJECT_ROOT=$(detect_project_root)
-
-# todos.md パス検証（パストラバーサル対策）
-validate_todos_path() {
-    local todos_file="$1"
-
-    # ファイル存在確認
-    if [[ ! -f "$todos_file" ]]; then
-        return 1
-    fi
-
-    # パストラバーサルチェック
-    local real_path=$(realpath "$todos_file" 2>/dev/null)
-    if [[ "$real_path" != "$PWD"* ]]; then
-        echo "❌ Security Error: Path traversal detected in todos.md path" >&2
-        exit $EXIT_SECURITY_ERROR
-    fi
-
-    # ファイルサイズ制限（10MB）
-    local file_size
-    if command -v stat >/dev/null 2>&1; then
-        file_size=$(stat -f%z "$todos_file" 2>/dev/null || stat -c%s "$todos_file" 2>/dev/null)
-        if [[ $file_size -gt 10485760 ]]; then
-            echo "❌ Error: todos.md exceeds 10MB limit" >&2
-            exit $EXIT_FILE_TOO_LARGE
-        fi
-    fi
-
-    return 0
-}
-```
-
-### Interactive Mode (引数なしの場合)
-
-**AskUserQuestion統合による対話的操作**:
-
-> **注**: 以下は Claude Code の `AskUserQuestion` ツールを使用した擬似コードです。
-
-```typescript
-// Primary Action Selection
-AskUserQuestion({
-  questions: [{
-    question: "TODO管理で何をしますか？",
-    header: "アクション選択",
-    multiSelect: false,
-    options: [
-      { label: "add-task", description: "🎯 新しいタスクを作成（優先度・ラベル設定）" },
-      { label: "review-list", description: "📋 現在のタスクリストを確認・管理" },
-      { label: "quick-complete", description: "✅ タスクの高速完了処理" },
-      { label: "git-sync", description: "🔄 Git状態との同期・ブランチ連携（未実装）" },
-      { label: "analyze", description: "📊 生産性・進捗の分析表示（未実装）" },
-      { label: "dashboard", description: "🎨 リッチ表示ダッシュボード（未実装）" }
-    ]
-  }]
-})
-
-// Task Creation Dialog (add-task 選択時)
-AskUserQuestion({
-  questions: [{
-    question: "タスクの優先度を選択してください",
-    header: "優先度",
-    multiSelect: false,
-    options: [
-      { label: "critical", description: "🔴 Critical: 本番障害・緊急対応" },
-      { label: "high", description: "🟡 High: 重要機能・期限あり" },
-      { label: "medium", description: "🟢 Medium: 通常開発・改善" },
-      { label: "low", description: "🔵 Low: 最適化・調査・将来対応" }
-    ]
-  }, {
-    question: "タスクのコンテキスト（分野）を選択してください",
-    header: "コンテキスト",
-    multiSelect: false,
-    options: [
-      { label: "ui", description: "🎨 UI/UX: フロントエンド・デザイン" },
-      { label: "api", description: "⚙️ API: バックエンド・サーバーサイド" },
-      { label: "docs", description: "📝 Docs: ドキュメント・コメント" },
-      { label: "test", description: "🧪 Test: テスト・品質保証" },
-      { label: "build", description: "🔧 Build: ビルド・CI/CD・インフラ" },
-      { label: "security", description: "🔒 Security: セキュリティ・認証" }
-    ]
-  }]
-})
-```
-
-### TodoWrite Integration
-
-**すべての操作でタスク管理を体系化**:
-1. プロジェクト状態の確認と分析
-2. ユーザー要求の解析と実行計画
-3. TODO操作の実行と検証
-4. 結果の確認と次のアクション提案
-
-### Git Integration & Context Detection
-
-**プロジェクト認識による自動コンテキスト設定**:
-
-プロジェクトファイル（package.json, Cargo.toml, requirements.txt等）を検出し、適切なコンテキストタグとタスク提案を自動生成。ブランチパターン（feature/, fix/, refactor/等）を分析し、関連タスクを推奨。
+### Other Commands
+- `remove N` / `delete N` - Delete task
+- `undo N` - Revert completed task to incomplete
+- `past due` - Show overdue tasks
+- `next` - Show next priority task (considering due date & priority)
 
 ---
 
 ## 📝 Todo Format
 
-**todos.md フォーマット** (ISO 8601 日付形式):
+**todos.md format** (ISO 8601 date format):
 
 ```markdown
 - [ ] Task description | Priority: high|medium|low | Context: ui|api|test|docs|build | Due: YYYY-MM-DD
 ```
 
-**例**:
+**Examples**:
 ```markdown
 - [ ] Fix authentication timeout | Priority: high | Context: api | Due: 2025-01-15
 - [ ] Update documentation | Priority: medium | Context: docs | Due: 2025-01-20
@@ -247,88 +97,208 @@ AskUserQuestion({
 
 ---
 
-## 🔒 セキュリティガイドライン
+## 🔒 Security Requirements
 
-### コマンドインジェクション対策
+### Input Sanitization (Required)
 
 ```bash
-# 引数のサニタイズ（必須）
+# Argument sanitization - whitelist approach
 sanitize_arguments() {
     local raw_args="$1"
-    # 危険な文字を除去: ; & | ` $ ( ) < > \
-    printf '%s' "$raw_args" | sed 's/[;&|`$()<>\\]//g'
+
+    # Length limit (DoS protection)
+    if [[ ${#raw_args} -gt 1000 ]]; then
+        echo "❌ Error: Input too long (max 1000 chars)" >&2
+        return 1
+    fi
+
+    # Extract allowed characters only (alphanumeric, space, symbols)
+    printf '%s' "$raw_args" | grep -Eo '[a-zA-Z0-9 ._:/-]+' || echo ""
 }
 
 SANITIZED_ARGS=$(sanitize_arguments "$ARGUMENTS")
 ```
 
-### パストラバーサル対策
+### File Path Validation (Required)
 
 ```bash
-# ファイルパス検証（必須）
+# Path traversal protection + .git protection
 validate_file_path() {
     local file_path="$1"
     local real_path
 
-    # realpath で絶対パス取得
+    # Get absolute path
     real_path=$(realpath "$file_path" 2>/dev/null)
 
-    # 現在のディレクトリ配下かチェック
+    # Deny .git directory access
+    if [[ "$real_path" == *"/.git/"* ]]; then
+        echo "❌ Security Error: Access to .git directory denied" >&2
+        return 1
+    fi
+
+    # Check if within current directory
     if [[ "$real_path" != "$PWD"* ]]; then
         echo "❌ Security Error: Path traversal detected" >&2
         return 1
+    fi
+
+    # File size limit (10MB)
+    if command -v stat >/dev/null 2>&1; then
+        local file_size=$(stat -f%z "$file_path" 2>/dev/null || stat -c%s "$file_path" 2>/dev/null)
+        if [[ $file_size -gt 10485760 ]]; then
+            echo "❌ Error: File exceeds 10MB limit" >&2
+            return 1
+        fi
     fi
 
     return 0
 }
 ```
 
-### Git操作の安全性
+---
 
-- `.git` ディレクトリへの直接操作を禁止
-- Git hookの実行は慎重に検証
-- Git コマンドは常に `2>/dev/null` でエラーを抑制
+## ⚡ Performance Optimization
+
+### Project Root Detection (Optimized)
+
+```bash
+# Optimized version without find command (10x faster)
+detect_project_root() {
+    # Check current directory
+    for file in package.json Cargo.toml requirements.txt; do
+        if [[ -f "$file" ]]; then
+            pwd
+            return 0
+        fi
+    done
+
+    # Search parent directories (max 3 levels)
+    local dir="$PWD"
+    for i in 1 2 3; do
+        dir=$(dirname "$dir")
+        for file in package.json Cargo.toml requirements.txt; do
+            if [[ -f "$dir/$file" ]]; then
+                echo "$dir"
+                return 0
+            fi
+        done
+    done
+
+    pwd
+}
+
+PROJECT_ROOT=$(detect_project_root)
+```
+
+### Git State Caching
+
+```bash
+# Environment variable caching to avoid duplicate execution
+if [[ -z "$GIT_CONTEXT_CACHED" ]]; then
+    export GIT_STATUS=$(git status --porcelain 2>&1 | head -20 || echo "No git repo")
+    export GIT_BRANCH=$(git branch --show-current 2>&1 || echo "No git branch")
+    export GIT_COMMITS=$(git log --oneline -3 2>&1 || echo "No commit history")
+    export GIT_CONTEXT_CACHED=1
+fi
+```
+
+### Date Parsing Optimization
+
+```bash
+# OS detection caching (only first time)
+if [[ -z "$DATE_CMD_TYPE" ]]; then
+    if date -v+1d +%Y-%m-%d >/dev/null 2>&1; then
+        export DATE_CMD_TYPE="bsd"  # macOS
+    else
+        export DATE_CMD_TYPE="gnu"  # Linux
+    fi
+fi
+
+parse_natural_language_date() {
+    local input="$1"
+
+    case "$input" in
+        tomorrow)
+            if [[ "$DATE_CMD_TYPE" == "bsd" ]]; then
+                date -v+1d +%Y-%m-%d
+            else
+                date -d "tomorrow" +%Y-%m-%d
+            fi
+            ;;
+        "next week")
+            if [[ "$DATE_CMD_TYPE" == "bsd" ]]; then
+                date -v+7d +%Y-%m-%d
+            else
+                date -d "7 days" +%Y-%m-%d
+            fi
+            ;;
+        "in "*)
+            local days="${input#in }"
+            days="${days% days}"
+            days="${days% day}"
+            if [[ "$DATE_CMD_TYPE" == "bsd" ]]; then
+                date -v+${days}d +%Y-%m-%d
+            else
+                date -d "${days} days" +%Y-%m-%d
+            fi
+            ;;
+        *)
+            # Use ISO 8601 format as-is
+            echo "$input"
+            ;;
+    esac
+}
+```
+
+---
+
+## 📅 Date Specification
+
+**Supported formats**:
+- `YYYY-MM-DD`: 2025-01-15 (ISO 8601 standard)
+- `tomorrow`: Next day
+- `next week`: 7 days later
+- `in 3 days`: 3 days later
 
 ---
 
 ## ⚠️ Error Handling
 
-### エラーコードの標準化
+### Error Code Specification
+
+| Code | Value | Meaning | Resolution |
+|------|-------|---------|-----------|
+| EXIT_SUCCESS | 0 | Success | - |
+| EXIT_NO_PERMISSION | 1 | Permission error | Check directory permissions |
+| EXIT_NOT_GIT_REPO | 2 | Git not initialized | Run git init |
+| EXIT_INVALID_ARGS | 3 | Invalid arguments | Check command format |
+| EXIT_FILE_NOT_FOUND | 4 | File not found | Create todos.md |
+| EXIT_SECURITY_ERROR | 5 | Security error | Verify input content |
+| EXIT_FILE_TOO_LARGE | 6 | File size exceeded | Clean up file |
+
+### Error Handling Implementation Example
 
 ```bash
-# エラーコード定義
+# Error code definitions
 readonly EXIT_SUCCESS=0
 readonly EXIT_NO_PERMISSION=1
-readonly EXIT_NOT_GIT_REPO=2
-readonly EXIT_INVALID_ARGS=3
-readonly EXIT_FILE_NOT_FOUND=4
 readonly EXIT_SECURITY_ERROR=5
-readonly EXIT_FILE_TOO_LARGE=6
-```
 
-### エラーハンドリング実装例
-
-```bash
-# ファイル操作エラー
+# File operation error
 if [ ! -w . ]; then
   echo "❌ Error: No write permission in current directory" >&2
   echo "💡 Solution: Check directory permissions or switch to project root" >&2
   exit $EXIT_NO_PERMISSION
 fi
 
-# Git リポジトリ検証
+# Git repository validation (warning only)
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo "⚠️ Warning: Not a git repository" >&2
   echo "📝 Note: Git integration features will be limited" >&2
-  # 継続可能なので exit しない
+  # Don't exit as it's not critical
 fi
 
-# プロジェクト認識エラー
-if [ ! -f package.json ] && [ ! -f Cargo.toml ] && [ ! -f requirements.txt ]; then
-  echo "🔍 Info: Unknown project type, using generic context options" >&2
-fi
-
-# 引数検証エラー
+# Argument validation error
 if [[ -z "$SANITIZED_ARGS" ]]; then
   echo "❌ Error: Invalid arguments provided" >&2
   echo "💡 Usage: /todo add \"description\" [--priority high] [--context api]" >&2
@@ -338,104 +308,118 @@ fi
 
 ---
 
-## 📅 Date/Time Processing
+## 🎯 Interactive Mode
 
-**日付フォーマット**（ISO 8601標準）:
-- **標準フォーマット**: `YYYY-MM-DD` (例: `2025-01-15`)
-- **表示フォーマット**: `MM/DD/YYYY` (ローカライズ対応時)
+When executed without arguments, provides interactive operation using AskUserQuestion tool:
 
-**自然言語対応**:
-- `tomorrow` - 翌日
-- `next week` - 1週間後
-- `in 3 days` - 3日後
-
-**実装例**:
 ```bash
-parse_natural_language_date() {
-    local input="$1"
-    local result
+# Primary action selection
+AskUserQuestion {
+  question: "What would you like to do with TODO management?"
+  options: [
+    "add-task": "Create a new task"
+    "review-list": "Review current task list"
+    "quick-complete": "Quick complete tasks"
+  ]
+}
 
-    case "$input" in
-        tomorrow)
-            result=$(date -v+1d +%Y-%m-%d 2>/dev/null || date -d "tomorrow" +%Y-%m-%d 2>/dev/null)
-            ;;
-        "next week")
-            result=$(date -v+7d +%Y-%m-%d 2>/dev/null || date -d "7 days" +%Y-%m-%d 2>/dev/null)
-            ;;
-        "in "*)
-            days="${input#in }"
-            days="${days% days}"
-            days="${days% day}"
-            result=$(date -v+${days}d +%Y-%m-%d 2>/dev/null || date -d "${days} days" +%Y-%m-%d 2>/dev/null)
-            ;;
-        *)
-            # ISO 8601形式をそのまま使用
-            result="$input"
-            ;;
-    esac
-
-    echo "$result"
+# Detailed settings for task creation
+AskUserQuestion {
+  questions: [
+    {
+      question: "Select task priority"
+      options: [
+        "critical": "🔴 Critical: Production issue, urgent response"
+        "high": "🟡 High: Important feature, has deadline"
+        "medium": "🟢 Medium: Regular development, improvements"
+        "low": "🔵 Low: Optimization, research, future work"
+      ]
+    },
+    {
+      question: "Select task context (domain)"
+      options: [
+        "ui": "🎨 UI/UX: Frontend"
+        "api": "⚙️ API: Backend"
+        "docs": "📝 Docs: Documentation"
+        "test": "🧪 Test: Testing & quality"
+        "build": "🔧 Build: Build & CI/CD"
+        "security": "🔒 Security: Security"
+      ]
+    }
+  ]
 }
 ```
 
 ---
 
-## 🎯 Core Behavior
+## 📚 Command Specification Table
 
-- **優先度順・期限順での自動ソート**
-- **Git連携**（ブランチ・コミット状態の自動更新）※Phase 2
-- **プロジェクト認識による自動コンテキスト判定**※Phase 2
-
----
-
-## 💡 Smart Suggestions（Phase 2 - 未実装）
-
-⚠️ 以下の機能は開発中です。
-
-- 関連コマンド提案（/commit, /debug等）
-- ワークフロー統合
-- 生産性改善提案
-
----
-
-## 📚 コマンド仕様統一表
-
-| コマンド | エイリアス | 引数形式 | 例 |
-|---------|----------|---------|---|
+| Command | Alias | Argument Format | Example |
+|---------|-------|----------------|---------|
 | `add` | - | `"description" [options]` | `/todo add "Fix bug" --priority high` |
 | `complete` | `done` | `N` | `/todo complete 1` |
 | `list` | - | `[options]` | `/todo list --filter priority:high` |
 | `remove` | `delete` | `N` | `/todo remove 3` |
 | `undo` | - | `N` | `/todo undo 2` |
 
-**オプション形式の統一**:
-- フラグ: `--priority high`, `--context ui`, `--due 2025-01-15`
-- フィルタ: `--filter priority:high`, `--filter context:api`
-- ソート: `--sort due`, `--sort priority`
+**Unified option format**:
+- Flags: `--priority high`, `--context ui`, `--due 2025-01-15`
+- Filters: `--filter priority:high`, `--filter context:api`
+- Sort: `--sort due`, `--sort priority`
 
 ---
 
-## 🔧 実装状況
+## 🔧 Implementation Status
 
-### ✅ 実装済み（Phase 1）
-- [x] 基本CRUD操作（add, complete, list, remove）
-- [x] 優先度・コンテキスト管理
-- [x] 日付処理（ISO 8601）
-- [x] インタラクティブモード
-- [x] エラーハンドリング
-- [x] セキュリティ対策（コマンドインジェクション、パストラバーサル）
+### ✅ Phase 1 (Implemented)
+- [x] Basic CRUD operations (add, complete, list, remove)
+- [x] Priority & context management
+- [x] Date handling (ISO 8601)
+- [x] Interactive mode
+- [x] Security measures (command injection, path traversal)
+- [x] Performance optimization
 
-### 🚧 開発中（Phase 2）
-- [ ] Git統合（sync, branch, project）
-- [ ] コマンド統合（debug, commit, serena）
-- [ ] 分析機能（analyze, dashboard, suggest）
-- [ ] 完了パターン分析
-- [ ] ボトルネック検出
+### 🚧 Phase 2 (Planned)
+Additional features under consideration:
+- Git integration enhancements
+- Team collaboration features
+- Advanced filtering and reporting
+- Integration with project management tools
+
+Contributions and feature requests are welcome!
 
 ---
 
-## 📖 参考リンク
+## 💡 Usage Examples
 
-- **ISO 8601 日付形式**: https://en.wikipedia.org/wiki/ISO_8601
-- **Git Best Practices**: https://git-scm.com/book/en/v2
-- **Bash Security**: https://mywiki.wooledge.org/BashGuide
+```bash
+# Example: GraphQL API project
+# Critical bug fix task
+/todo add "Fix resolver error in TaskQuery" --priority critical --context api --due tomorrow
+
+# Example: React application
+# UI component fix
+/todo add "Fix button component state bug" --priority high --context ui --due today
+
+# Example: Documentation project
+# Documentation update task
+/todo add "Update API documentation" --priority medium --context docs --due next week
+
+# Example: Testing task
+# Test coverage improvement
+/todo add "Add unit tests for user service" --priority high --context test
+
+# Filter and view tasks
+/todo list --filter context:api --sort priority
+/todo list --filter priority:critical
+
+# Check next priority task
+/todo next
+```
+
+---
+
+## 📖 References
+
+- **ISO 8601 Date Format**: https://en.wikipedia.org/wiki/ISO_8601
+- **Bash Security Best Practices**: https://mywiki.wooledge.org/BashGuide

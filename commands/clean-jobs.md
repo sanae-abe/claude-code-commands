@@ -1,212 +1,177 @@
-# バックグラウンドジョブクリーンアップコマンド
+---
+allowed-tools: Bash, AskUserQuestion
+argument-hint:
+description: Safe cleanup of background jobs
+model: sonnet
+---
 
-> **バージョン**: 1.0.0
-> **作成日**: 2025-11-10
-> **更新日**: 2025-11-10
-> **関連コマンド**: `/web-dev`, `/api-dev`, `/ds-notebook`（バックグラウンドプロセス起動系）
+# Background Job Cleanup
 
-## 概要
+> **Version**: 1.1.0
+> **Last Updated**: See Git history
+> **Related Commands**: `/web-dev`, `/api-dev`, `/ds-notebook`
 
-現在のClaude Codeセッションで作成されたバックグラウンドジョブのみを安全にクリーンアップします。
-他のClaude Codeセッションには影響しません。
+## Overview
 
-**想定ユースケース**:
-- 長時間の開発セッション後のクリーンアップ
-- `/web-dev` 等のプロセス起動後の手動停止
-- メモリ節約のための定期的なジョブ整理
+Safely cleans up only background jobs created in the current Claude Code session.
+Does not affect other Claude Code sessions.
 
-## Claude Code 実装ノート
+**Intended Use Cases**:
+- Cleanup after long development sessions
+- Manual stop of processes started by `/web-dev` etc.
+- Periodic job cleanup for memory conservation
 
-このスラッシュコマンドはClaude Codeによって実行されるため、以下の動作になります:
+## Execution Flow
 
-1. **Bash tool使用**: `jobs -l` 等のコマンド実行
-2. **AskUserQuestion tool使用**: 選択肢提示（全削除/個別/キャンセル）
-3. **対話的フロー**: ユーザーの選択に応じて動的に処理
+1. **Check background jobs in current session**
+2. **Present job list to user**
+3. **Present cleanup method choices** (AskUserQuestion)
+4. **Execute based on selection**
 
-## 実行フロー
+## Implementation Steps
 
-1. 現在のセッションのバックグラウンドジョブを確認
-2. ジョブ一覧をユーザーに提示
-3. クリーンアップ方法を選択肢として提示
-4. 選択に応じて実行
+### Step 1: Check Current Jobs
 
-## 手順
-
-### ステップ1: 現在のジョブ確認
-
-まず、`jobs -l` で現在のセッションのバックグラウンドジョブを確認してください。
+First, check background jobs in the current session with `jobs -l`.
 
 ```bash
 jobs -l
 ```
 
-**ジョブが0件の場合:**
-以下を表示して終了：
+**If 0 jobs:**
+Display:
 ```
-✅ クリーンアップするバックグラウンドジョブはありません
+✅ No background jobs to clean up
 ```
+and exit.
 
-### ステップ2: クリーンアップ選択肢を提示
+### Step 2: Present Cleanup Options
 
-**ジョブが存在する場合:**
+**If jobs exist:**
 
-AskUserQuestion ツールを使用して以下の選択肢を提示：
+Use AskUserQuestion tool to present the following options:
 
 ```json
 {
   "questions": [{
-    "question": "バックグラウンドジョブのクリーンアップ方法を選択してください",
-    "header": "クリーンアップ",
+    "question": "Select background job cleanup method",
+    "header": "Cleanup",
     "multiSelect": false,
     "options": [
       {
-        "label": "全てクリーンアップ",
-        "description": "現在のセッションの全ジョブをkillします"
+        "label": "Clean up all",
+        "description": "Kill all jobs in current session"
       },
       {
-        "label": "個別選択",
-        "description": "特定のジョブ番号を指定してkillします"
+        "label": "Select individually",
+        "description": "Kill specific job numbers (specify via \"Other\")"
       },
       {
-        "label": "キャンセル",
-        "description": "何もせずに終了します"
+        "label": "Cancel",
+        "description": "Exit without doing anything"
       }
     ]
   }]
 }
 ```
 
-### ステップ3: 実行
+### Step 3: Execute
 
-選択に応じて以下を実行：
+Execute based on selection:
 
-#### 全てクリーンアップの場合
+#### Clean up all
 
 ```bash
-# 全ジョブをkill
-if jobs -p | xargs kill 2>&1; then
-    echo "✅ 全てのジョブをクリーンアップしました"
+# Get all job PIDs and kill (optimized with arrays)
+pids=($(jobs -p))
+
+if [[ ${#pids[@]} -gt 0 ]]; then
+    # Performance optimization with batch kill
+    if kill "${pids[@]}" 2>&1; then
+        echo "✅ All jobs cleaned up"
+    else
+        echo "⚠️  Some jobs failed to clean up"
+        jobs -l  # Display remaining jobs
+    fi
 else
-    echo "⚠️  一部のジョブのクリーンアップに失敗しました"
-    jobs -l  # 残っているジョブを表示
+    echo "✅ No jobs to clean up"
 fi
 ```
 
-#### 個別選択の場合
+#### Select individually
 
-ユーザーに以下を質問：
-```
-クリーンアップするジョブ番号を入力してください（スペース区切り、例: 1 3 5）:
-```
-
-**入力例**: `1 3 5`
+**Receive input from AskUserQuestion "Other" option:**
+- Prompt user for input in "1 3 5" format
+- Example input: `1 3 5`
 
 ```bash
-# ユーザー入力を受け取る
-read -p "クリーンアップするジョブ番号（スペース区切り）: " job_numbers
+# Input from AskUserQuestion
+# $USER_INPUT is input from "Other" field
+job_numbers="$USER_INPUT"
 
-# 入力検証：数字とスペースのみ許可
+# Input validation: only numbers and spaces allowed
 if [[ ! "$job_numbers" =~ ^[0-9\ ]+$ ]]; then
-    echo "❌ エラー: ジョブ番号は数字とスペースのみ指定してください（例: 1 3 5）"
+    echo "❌ Error: Job numbers must be digits and spaces only (example: 1 3 5)"
     exit 1
 fi
 
-# 各ジョブをkill
-killed_count=0
-failed_count=0
+# Race condition prevention: pre-fetch job PIDs
+pids=()
+failed_jobs=()
 
 for job_num in $job_numbers; do
-    if kill %$job_num 2>/dev/null; then
-        ((killed_count++))
+    pid=$(jobs -p %$job_num 2>/dev/null)
+    if [[ -n "$pid" ]]; then
+        pids+=($pid)
     else
-        ((failed_count++))
-        echo "⚠️  ジョブ #$job_num のクリーンアップに失敗しました"
+        failed_jobs+=($job_num)
     fi
 done
 
-echo "✅ $killed_count 個のジョブをクリーンアップしました"
-if [[ $failed_count -gt 0 ]]; then
-    echo "⚠️  $failed_count 個のジョブのクリーンアップに失敗しました"
+# Batch kill collected PIDs
+killed_count=0
+for pid in "${pids[@]}"; do
+    if kill "$pid" 2>/dev/null; then
+        ((killed_count++))
+    fi
+done
+
+# Result report
+echo "✅ $killed_count jobs cleaned up"
+if [[ ${#failed_jobs[@]} -gt 0 ]]; then
+    echo "⚠️  Non-existent jobs: ${failed_jobs[*]}"
 fi
 ```
 
-#### キャンセルの場合
+#### Cancel
 
-何もせずに終了します。
+Exit without doing anything.
 
-### ステップ4: 結果確認とレポート
+### Step 4: Verify Results
 
-クリーンアップ後の状態を確認して報告：
+Check and report state after cleanup:
 
 ```bash
-# クリーンアップ後の確認
+# Check after cleanup
 remaining_jobs=$(jobs -l)
 
 if [[ -z "$remaining_jobs" ]]; then
-    echo "🎉 全てのバックグラウンドジョブがクリーンアップされました"
+    echo "🎉 All background jobs have been cleaned up"
 else
-    echo "📋 残りのジョブ:"
+    echo "📋 Remaining jobs:"
     jobs -l
 fi
 ```
 
-## 注意事項
+## Notes
 
-- このコマンドは**現在のセッション**のジョブのみに影響します
-- 他のClaude Codeセッションや別のターミナルのプロセスには影響しません
-- 実行中の重要なタスクがある場合は、個別選択を推奨します
+- This command only affects jobs in the **current session**
+- Does not affect other Claude Code sessions or separate terminal processes
+- Individual selection is recommended if important tasks are running
 
-## テスト方法
+## Security Enhancements (v1.1.0)
 
-### 手動テスト手順
-
-#### 1. 準備: バックグラウンドジョブの作成
-```bash
-# テスト用のダミージョブを起動
-sleep 300 &
-sleep 400 &
-sleep 500 &
-jobs -l  # 3つのジョブが表示されることを確認
-```
-
-#### 2. 個別削除のテスト
-```bash
-/clean-jobs
-# → "個別選択" を選択
-# → "1 3" と入力
-# → ジョブ1,3が削除され、ジョブ2が残ることを確認
-```
-
-#### 3. 全削除のテスト
-```bash
-/clean-jobs
-# → "全てクリーンアップ" を選択
-# → 全ジョブが削除されることを確認
-```
-
-#### 4. ジョブ0件時のテスト
-```bash
-/clean-jobs
-# → "クリーンアップするジョブはありません" が表示されることを確認
-```
-
-### 期待される動作
-
-- ✅ 現在のセッションのジョブのみ表示・削除
-- ✅ 他のターミナル・セッションのジョブには影響なし
-- ✅ 無効な入力時は適切なエラーメッセージ
-- ✅ 部分的失敗時も成功したジョブ数を報告
-
-## 将来的な拡張案
-
-### Phase 2: フィルタリング機能
-- コマンド名でのフィルタリング（例: sleep プロセスのみ）
-- 実行時間でのフィルタリング（例: 1時間以上のジョブのみ）
-
-### Phase 3: 自動クリーンアップ
-- 一定時間経過後の自動クリーンアップ
-- `/web-dev` 終了時の自動実行
-
-### Phase 4: 統計・レポート
-- セッション中のジョブ起動履歴
-- リソース使用状況のサマリー
+- ✅ Unified to AskUserQuestion (eliminated `read` command)
+- ✅ Race condition prevention (pre-fetch PIDs)
+- ✅ Enhanced input validation (regex check)
+- ✅ Performance optimization (use Bash arrays)

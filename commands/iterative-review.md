@@ -1,599 +1,399 @@
 ---
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TodoWrite, AskUserQuestion, Task
-argument-hint: <対象> [--rounds=3] [--perspectives=security,performance,maintainability]
-description: 複数視点による反復レビュー - セキュリティ、パフォーマンス、保守性を多角的に分析
+argument-hint: "<target> [--rounds=4] [--perspectives=necessity,security,performance,maintainability] [--skip-necessity]"
+description: Multi-perspective iterative review - Analyzes necessity, security, performance, and maintainability from multiple angles. Includes Round 0 (deletion/simplification consideration) by default
 model: sonnet
 ---
 
-# 🔄 反復レビューシステム
+# 🔄 Iterative Review System
 
-レビュー対象: $ARGUMENTS
+Review Target: $ARGUMENTS
 
-## 概要
+## 📋 Table of Contents
 
-複数の異なる視点から同じコード・設定・ドキュメントを反復的にレビューすることで、単一視点では見落としがちな問題を包括的に発見します。
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Basic Approach](#basic-approach)
+- [Review Perspective Definitions](#review-perspective-definitions)
+  - [Round 0: Necessity Review](#round-0-necessity-review)
+  - [Round 1: Security Perspective](#round-1-security-perspective)
+  - [Round 2: Performance Perspective](#round-2-performance-perspective)
+  - [Round 3: Maintainability Perspective](#round-3-maintainability-perspective)
+- [Review Mode Selection](#review-mode-selection)
+- [Perspective Customization](#perspective-customization)
+- [Target-Specific Reviews](#target-specific-reviews)
+- [Related Documentation](#related-documentation)
 
-**利点**:
-- 各セッションで異なる着眼点が得られる
-- 単一視点の盲点を補完
-- より包括的な品質向上
+---
 
-## クイックスタート
+## 📖 Overview
+
+Iteratively reviewing the same code, configuration, or documentation from multiple different perspectives enables comprehensive discovery of issues that might be overlooked from a single viewpoint.
+
+### Key Feature
+
+**Round 0 "Necessity Review" considers deletion/simplification first**
+- ❌ Ask "is this even needed?" rather than "how to improve"
+- ✅ Actively recommend deletion of unnecessary features
+- ✅ Prioritize fundamental reconsideration over minor improvements
+
+### Additional Benefits
+
+- Different insights gained in each session
+- Compensates for single-perspective blind spots
+- Eliminates status quo bias
+- More comprehensive quality improvement
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# 基本的な使用（3視点：セキュリティ、パフォーマンス、保守性）
+# Basic usage (4 perspectives: necessity, security, performance, maintainability)
 /iterative-review src/components/Button.tsx
 
-# CLAUDE.md の包括レビュー
-/iterative-review ~/.claude/CLAUDE.md
+# Configuration file review (discover redundant parts to delete)
+/iterative-review README.md
 
-# カスタム視点指定
-/iterative-review file.ts --perspectives=security,accessibility,performance
+# Necessity review only (fastest evaluation of deletion/simplification potential)
+/iterative-review feature.ts --perspectives=necessity --rounds=1
 
-# ラウンド数変更
-/iterative-review file.ts --rounds=5
+# 🔧 Constructive review (skip Round 0, only propose improvements)
+# Use for features with proven value or during new feature implementation
+/iterative-review file.ts --skip-necessity
 
-# ディレクトリ全体レビュー
+# Custom perspective specification
+/iterative-review file.ts --perspectives=necessity,security,accessibility
+
+# Full directory review (discover unnecessary files/features)
 /iterative-review src/components/
 
-# MR/PRレビュー
+# MR/PR review (evaluate if large changes are truly necessary)
 /iterative-review --mr 123
 /iterative-review --pr 456
 ```
 
-## Current State
+---
 
-以下の情報を収集してレビューコンテキストとします:
+## 🎯 Basic Approach
 
-**注**: この情報収集はレビュー開始時に1回のみ実行し、以降のラウンドで再利用します。
+As an experienced senior engineer, you will iteratively review targets from multiple expert perspectives.
 
-あなたは経験豊富なシニアエンジニアとして、複数の専門的視点から対象を反復的にレビューします。
+### Review Attitude
 
-## 基本方針
+- **Zero-based thinking**: Ask "is this even needed?" first rather than "how to improve"
+- **Don't hesitate to delete**: Eliminate status quo bias and actively recommend deletion of unnecessary features
+- **Bold proposals**: Include "fundamental reconsideration" as an option, not just "safe improvements"
+- **Multi-angle analysis**: Comprehensive evaluation from different expert perspectives
+- **Prioritization**: Importance classification of findings (deletion > simplification > improvement)
+- **Integrated report**: Final report consolidating all perspective results
 
-- **多角的分析**: 異なる専門視点からの包括的評価
-- **建設的フィードバック**: 具体的な改善案の提示
-- **優先順位付け**: 発見事項の重要度分類
-- **統合レポート**: 全視点の結果を統合した最終報告
+### Execution Flow
 
-## Execution Flow
+**TodoWrite required**:
+1. Identify target (file/directory/MR/PR)
+2. Determine perspectives (default or custom)
+3. Confirm number of rounds
+4. Establish execution plan for each round
 
-### 1. 引数解析とレビュー計画
-
-**TodoWrite必須使用**:
-1. 対象の特定（ファイル/ディレクトリ/MR/PR）
-2. 視点の決定（デフォルト or カスタム）
-3. ラウンド数の確認
-4. パフォーマンス制限の確認（ファイル数・サイズチェック）
-5. 各ラウンドの実行計画策定
-
-### パフォーマンス制限
-
-レビュー実行前に以下の制限を確認し、必要に応じて警告またはスキップを実行:
-
-- **最大ファイル数**: 500ファイル（超過時は警告表示）
-- **ファイルサイズ制限**: 1ファイルあたり10,000行まで
-- **タイムアウト**: 各ラウンド最大10分
-- **除外ディレクトリ**: `node_modules/`, `.git/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `coverage/`
-- **キャッシュ戦略**: 初回ファイルリスト取得結果を全ラウンドで再利用
+**Argument parsing**:
 
 ```bash
-# 制限チェック例
-TARGET_FILES=$(find "$TARGET" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.md" \) \
-    ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/dist/*" ! -path "*/build/*")
-FILE_COUNT=$(echo "$TARGET_FILES" | wc -l)
+# Default settings
+PERSPECTIVES="necessity,security,performance,maintainability"  # Round 0 + 3 rounds
+ROUNDS=4
+SKIP_NECESSITY=false
 
-if [[ $FILE_COUNT -gt 500 ]]; then
-    echo "⚠️  警告: $FILE_COUNT ファイル検出。500ファイルを超えています。"
-    echo "   大規模レビューには時間がかかります。続行しますか？ (y/N)"
+# If --skip-necessity is specified
+if [[ "$SKIP_NECESSITY" == true ]]; then
+    PERSPECTIVES="security,performance,maintainability"
+    ROUNDS=3
 fi
 ```
 
-### 2. 対象の種類判定
+---
 
+## 🔍 Review Perspective Definitions
+
+### Round 0: Necessity Review
+
+**🎯 Purpose**: Eliminate status quo bias and question the necessity of the target with zero-based thinking
+
+**Important Principles**:
+- ❌ Ask "is this even needed?" not "how to improve it"
+- ❌ Actively consider deletion/consolidation rather than protecting existing implementation
+- ✅ Strictly evaluate the cost of complexity
+- ✅ Always present simpler alternatives
+
+**Required Check Items**:
+
+#### 📌 Fundamental Necessity Evaluation
+- **Real use cases**: Do concrete scenarios exist where this is actually used?
+  - Can you list 3+ scenarios where it's "actually used" not just "seems useful"
+  - Predicted weekly/monthly usage frequency?
+- **Alternative means exist**: Can existing features/commands/tools substitute?
+- **Cost of complexity**: Is the value worth the added complexity?
+
+#### 🔍 Deletion/Consolidation Potential
+- **Deletion impact analysis**: What is the actual harm if this feature is deleted?
+- **Consolidation possibility**: Can it be consolidated into existing features?
+- **Simplification potential**: Can the same value be provided with simpler implementation?
+
+#### 🎯 Value Proposition Clarification
+- **Clear value**: Can the raison d'être of this feature be explained in one sentence?
+- **Priority evaluation**: Should this be prioritized over other improvements/new features?
+
+**Evaluation Criteria**:
+
+| Item | 🔴 Recommend Deletion | 🟡 Needs Review | 🟢 Justified Retention |
+|------|---------------------|----------------|---------------------|
+| **Real use cases** | 0-1 cases | 2-3 cases | 4+ cases |
+| **Alternative means** | Easily achievable | Some effort required | Difficult |
+| **Usage frequency** | Less than monthly | Weekly | 3+ times/week |
+| **Maintenance cost** | High | Medium | Low |
+
+**Review Result Expression**:
+- **🔴 Recommend deletion**: "This feature is unnecessary. Reason: [specific reason]. Alternative: [how to achieve with existing features]"
+- **🟡 Recommend simplification**: "Current implementation is excessive. Should narrow to [X feature] only"
+- **🟢 Justified retention**: "Clear value exists. However, [Y] improvement needed"
+
+---
+
+### Round 1: Security Perspective
+
+**🔒 Key Check Items**:
+- **Input validation**: Proper validation of all user input
+- **Output escaping**: XSS/injection countermeasure implementation status
+- **Authentication/Authorization**: Appropriateness of permission checks, session management
+- **Sensitive information**: Hardcoded secrets, API keys, etc.
+- **Encrypted communication**: HTTPS/TLS usage, sensitive data protection
+- **Dependencies**: Use of libraries with known vulnerabilities
+- **OWASP compliance**: Response status to each OWASP Top 10 item
+
+**Analysis Methods**:
 ```bash
-# 引数解析と種別検出
-PERSPECTIVES="security,performance,maintainability"  # default
-ROUNDS=3  # default
-TARGET=""
-REVIEW_TYPE=""
-
-# オプション解析
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --perspectives=*)
-      PERSPECTIVES="${1#*=}"
-      shift
-      ;;
-    --rounds=*)
-      ROUNDS="${1#*=}"
-      shift
-      ;;
-    --mr|--pr)
-      REVIEW_TYPE="merge_request"
-      TARGET="$2"
-      shift 2
-      ;;
-    *)
-      TARGET="$1"
-      shift
-      ;;
-  esac
-done
-
-# ファイル種別検出
-if [[ "$TARGET" == *".md"* ]]; then
-    REVIEW_TYPE="documentation"
-elif [[ "$TARGET" == *".ts"* ]] || [[ "$TARGET" == *".tsx"* ]]; then
-    REVIEW_TYPE="typescript_code"
-elif [[ "$TARGET" == *".py"* ]]; then
-    REVIEW_TYPE="python_code"
-elif [[ -d "$TARGET" ]]; then
-    REVIEW_TYPE="directory"
-fi
-```
-
-### 3. レビュー視点の定義
-
-#### 🔒 セキュリティ視点（Round 1）
-
-**重点チェック項目**:
-- [ ] **入力検証**: すべてのユーザー入力の適切なバリデーション
-- [ ] **出力エスケープ**: XSS/インジェクション対策の実装状況
-- [ ] **認証・認可**: 権限チェックの適切性、セッション管理
-- [ ] **機密情報**: ハードコードされたシークレット、API Key等
-- [ ] **暗号化通信**: HTTPS/TLS使用、機密データの保護
-- [ ] **依存関係**: 既知の脆弱性を持つライブラリの使用
-- [ ] **OWASP対応**: OWASP Top 10の各項目への対応状況
-
-**分析手法**:
-```bash
-# 機密情報検索
+# Search for sensitive information
 rg -i "password|api_key|secret|token" --type typescript
 
-# 危険な関数の使用確認
+# Check for dangerous function usage
 rg "dangerouslySetInnerHTML|eval\(|Function\(|execSync" --type typescript
-
-# 外部依存の脆弱性確認
-npm audit || echo "npm audit not available"
 ```
 
-#### ⚡ パフォーマンス視点（Round 2）
+---
 
-**重点チェック項目**:
-- [ ] **計算量**: アルゴリズムの時間/空間計算量の適切性
-- [ ] **N+1問題**: データベースクエリ、API呼び出しの効率性
-- [ ] **メモリリーク**: イベントリスナー、タイマーの適切な破棄
-- [ ] **バンドルサイズ**: 不要な依存、Tree Shaking最適化
-- [ ] **レンダリング**: React等のレンダリング最適化（useMemo, useCallback）
-- [ ] **非同期処理**: Promise, async/await の適切な使用
-- [ ] **キャッシング**: 適切なキャッシュ戦略の実装
+### Round 2: Performance Perspective
 
-**分析手法**:
+**⚡ Key Check Items**:
+- **Computational complexity**: Appropriateness of algorithm time/space complexity
+- **N+1 problem**: Efficiency of database queries, API calls
+- **Memory leaks**: Proper cleanup of event listeners, timers
+- **Bundle size**: Unnecessary dependencies, Tree Shaking optimization
+- **Rendering**: React rendering optimization (useMemo, useCallback)
+- **Async processing**: Proper use of Promise, async/await
+- **Caching**: Implementation of appropriate cache strategies
+
+**Analysis Methods**:
 ```bash
-# 大きなファイルの特定
-find . -type f \( -name "*.ts" -o -name "*.tsx" \) -exec wc -l {} + | sort -rn | head -10
-
-# ループ内のAPI呼び出し検出
+# Detect API calls in loops
 rg "for.*await|while.*await|\.map\(async" --type typescript
 
-# useEffect依存配列の確認
-rg "useEffect\(" -A 5 --type typescript | grep -E "^\s*\[.*\]"
+# Identify large files
+find . -type f \( -name "*.ts" -o -name "*.tsx" \) -exec wc -l {} + | sort -rn | head -10
 ```
 
-#### 🛠️ 保守性・アーキテクチャ視点（Round 3）
+---
 
-**重点チェック項目**:
-- [ ] **単一責任の原則**: 各関数・コンポーネントの責務の明確性
-- [ ] **DRY原則**: コードの重複、抽象化の適切性
-- [ ] **命名規則**: 一貫性、自己文書化された命名
-- [ ] **型安全性**: TypeScript strict mode、型推論の活用
-- [ ] **テスタビリティ**: 単体テストの容易性、依存性注入
-- [ ] **ドキュメント**: コメント、JSDoc、README の適切性
-- [ ] **エラーハンドリング**: 例外処理、エラーメッセージの適切性
-- [ ] **スケーラビリティ**: 将来の拡張への対応
+### Round 3: Maintainability Perspective
 
-**分析手法**:
+**🛠️ Key Check Items**:
+- **Single responsibility principle**: Clarity of each function/component responsibility
+- **DRY principle**: Code duplication, appropriateness of abstraction
+- **Naming conventions**: Consistency, self-documenting naming
+- **Type safety**: TypeScript strict mode, type inference utilization
+- **Testability**: Unit test ease, dependency injection
+- **Documentation**: Appropriateness of comments, JSDoc, README
+- **Error handling**: Exception handling, error message appropriateness
+- **Scalability**: Response to future expansion
+
+**Analysis Methods**:
 ```bash
-# 長すぎる関数の検出（50行以上）
-find . -name "*.ts" -o -name "*.tsx" | while read -r file; do
-    awk -v fname="$file" '
-        /^function|^const.*=.*=>|^export function/ {start=NR}
-        /^}/ {if (NR-start > 50) print fname":"start"-"NR" ("NR-start" lines)"}' "$file"
-done
-
-# コード重複の検出
-rg -n "function.*\{" --type typescript | awk -F: '{print $2}' | sort | uniq -c | sort -rn | head -10
-
-# 型注釈なしの確認
+# Check for missing type annotations
 rg ": any|as any" --type typescript
+
+# Detect code duplication
+rg -n "function.*\{" --type typescript | awk -F: '{print $2}' | sort | uniq -c | sort -rn | head -10
 ```
 
-### 4. レビュー実行フロー
-
-各ラウンドで以下を実行:
-
-1. **対象の読み込み**
-   ```bash
-   # ファイルの場合（安全なパス処理）
-   if [[ -f "$TARGET_FILE" && "$TARGET_FILE" != /* ]]; then
-       # 相対パスの場合、現在ディレクトリ配下に制限
-       cat "./$TARGET_FILE"
-   elif [[ -f "$TARGET_FILE" ]]; then
-       cat "$TARGET_FILE"
-   fi
-
-   # ディレクトリの場合（深さ制限付き）
-   find "$TARGET_DIR" -maxdepth 5 -type f \( -name "*.ts" -o -name "*.tsx" \) \
-       ! -path "*/node_modules/*" ! -path "*/.git/*"
-
-   # MR/PRの場合（認証トークン確認）
-   if [[ -n "$GITLAB_TOKEN" ]]; then
-       glab mr view "$MR_NUMBER"
-   elif [[ -n "$GITHUB_TOKEN" ]]; then
-       gh pr view "$PR_NUMBER"
-   else
-       echo "⚠️  認証トークンが設定されていません"
-   fi
-   ```
-
-## セキュリティ考慮事項
-
-### 引数処理の安全性
-- [ ] 全ての引数は必ず引用符で囲む: `"$TARGET"`
-- [ ] パス入力はホームディレクトリ外へのアクセスを制限
-- [ ] `--mr`, `--pr`等のオプション解析時は正規表現でバリデーション
-- [ ] シンボリックリンクの追跡を制限: `find`に`-P`オプション使用
-
-### 実行コマンドの安全性
-- [ ] `find`実行時は`-maxdepth`で深さ制限（デフォルト5階層）
-- [ ] `rg`/`grep`は既知のファイルタイプに限定
-- [ ] Git操作は`.git`ディレクトリの直接操作を避ける
-- [ ] 外部CLIツール（`glab`, `gh`）使用時は認証トークンの存在確認
-
-### 機密情報保護
-- [ ] レビュー出力に機密情報（パスワード、API Key等）が含まれないよう除外処理
-- [ ] ログファイル、一時ファイルは適切に削除
-- [ ] 外部サービス連携時は最小権限の原則を適用
-
-2. **視点特化分析**
-   - 該当視点のチェックリスト確認
-   - 自動検出スクリプト実行
-   - 手動レビュー実施
-
-3. **発見事項の記録**
-   - 🔴 Critical: 重大な問題
-   - 🟡 Important: 重要な改善点
-   - 🟢 Minor: 軽微な改善提案
-
-### 5. 統合レポート生成
-
-全ラウンド完了後、以下の形式で統合レポートを生成:
-
-```markdown
-# 🔄 反復レビュー結果
-
-## 📋 基本情報
-- **対象**: [ファイル名/ディレクトリ/MR番号]
-- **種類**: [TypeScript/Python/ドキュメント等]
-- **レビュー日時**: [YYYY-MM-DD HH:MM]
-- **視点数**: [3 (セキュリティ、パフォーマンス、保守性)]
-
 ---
 
-## 🔒 Round 1: セキュリティ視点
+## 🎭 Review Mode Selection
 
-### 発見事項
-#### 🔴 Critical Issues
-[重大なセキュリティリスク]
+### Default Mode: Zero-Based Thinking Review
 
-#### 🟡 Important Issues
-[重要なセキュリティ改善点]
+**Characteristics**:
+- Includes Round 0 "Necessity Review" (4 rounds)
+- Asks "is this even needed?" first
+- Actively considers deletion/simplification
 
-#### 🟢 Minor Issues
-[軽微なセキュリティ改善提案]
+**Use Cases**:
+- New feature proposal/design stage
+- Existing feature inventory
+- Organization of configuration files like CLAUDE.md
+- Preventing feature bloat
 
-### 推奨アクション
-[具体的な修正提案]
+### Constructive Review Mode: `--skip-necessity`
 
----
+**Characteristics**:
+- Skip Round 0 (3 rounds)
+- Only propose improvements
+- Don't consider deletion/simplification
 
-## ⚡ Round 2: パフォーマンス視点
+**Use Cases**:
+- Improving features with proven value
+- During new feature implementation (not yet complete)
+- During refactoring (features remain)
+- Security/performance improvement purposes
 
-### 発見事項
-#### 🔴 Critical Issues
-[重大なパフォーマンス問題]
+**Usage Examples**:
+```bash
+# Quality improvement of existing critical features
+/iterative-review src/auth/login.ts --skip-necessity
 
-#### 🟡 Important Issues
-[重要なパフォーマンス改善点]
-
-#### 🟢 Minor Issues
-[軽微なパフォーマンス改善提案]
-
-### 推奨アクション
-[具体的な最適化提案]
-
----
-
-## 🛠️ Round 3: 保守性・アーキテクチャ視点
-
-### 発見事項
-#### 🔴 Critical Issues
-[重大な保守性問題]
-
-#### 🟡 Important Issues
-[重要な保守性改善点]
-
-#### 🟢 Minor Issues
-[軽微な保守性改善提案]
-
-### 推奨アクション
-[具体的なリファクタリング提案]
-
----
-
-## 📊 総合評価
-
-### 発見事項サマリー
-- 🔴 Critical: [X件]
-- 🟡 Important: [Y件]
-- 🟢 Minor: [Z件]
-
-### 優先度別アクションプラン
-
-#### 最優先（即対応）
-1. [Critical Issue 1]
-2. [Critical Issue 2]
-
-#### 高優先度（1週間以内）
-1. [Important Issue 1]
-2. [Important Issue 2]
-
-#### 中優先度（必要に応じて）
-1. [Minor Issue 1]
-2. [Minor Issue 2]
-
-### 総合所見
-[全体的な評価と改善の方向性]
+# Review of features under new implementation
+/iterative-review src/features/new-feature.ts --skip-necessity
 ```
 
-## 視点のカスタマイズ
+---
 
-デフォルト以外の視点も指定可能:
+## 🎨 Perspective Customization
 
-### 追加視点の例
+Perspectives other than defaults can be specified:
 
-- **accessibility**: アクセシビリティ（WCAG準拠）
-- **i18n**: 国際化対応
-- **testing**: テストカバレッジ・品質
-- **documentation**: ドキュメント充実度
-- **consistency**: コーディング規約・一貫性
-- **scalability**: スケーラビリティ
+### Additional Perspective Examples
 
-### カスタム視点の使用例
+- **necessity**: Necessity evaluation (Round 0) ← **Included by default**
+- **accessibility**: Accessibility (WCAG compliance)
+- **i18n**: Internationalization support
+- **testing**: Test coverage/quality
+- **documentation**: Documentation completeness
+- **consistency**: Coding conventions/consistency
+- **scalability**: Scalability
+- **simplicity**: Simplicity/complexity evaluation
+
+### Custom Perspective Usage Examples
 
 ```bash
-# アクセシビリティ + i18n重点
+# Accessibility + i18n focus
 /iterative-review components/ --perspectives=accessibility,i18n
 
-# 5視点の包括レビュー
-/iterative-review src/ --perspectives=security,performance,maintainability,testing,accessibility
+# Comprehensive 5-perspective review
+/iterative-review src/ --perspectives=necessity,security,performance,maintainability,testing
 ```
 
-## 対象別レビュー特化
+---
 
-### ドキュメントレビュー（.md）
+## 📁 Target-Specific Reviews
 
-追加チェック項目:
-- [ ] **構造**: 階層化、目次、セクション分割
-- [ ] **リンク**: 内部リンク切れ、外部リンク有効性
-- [ ] **一貫性**: 用語統一、フォーマット統一
-- [ ] **網羅性**: 必要情報の過不足
-- [ ] **更新性**: 古い情報、日付の妥当性
+### Document Review (.md)
 
-### 設定ファイルレビュー（CLAUDE.md等）
+Additional check items:
+- **Structure**: Hierarchy, table of contents, section division
+- **Links**: Broken internal links, external link validity
+- **Consistency**: Term unification, format unification
+- **Completeness**: Sufficiency/excess of necessary information
+- **Currency**: Old information, date appropriateness
 
-追加チェック項目:
-- [ ] **実用性**: 実際に使えるコマンド・手順
-- [ ] **保守性**: 肥大化、重複、整理状況
-- [ ] **学習曲線**: 新規ユーザーの理解しやすさ
-- [ ] **拡張性**: 新機能追加の容易性
+### Configuration File Review (CLAUDE.md, etc.)
 
-## 注意事項
+Additional check items:
+- **Practicality**: Actually usable commands/procedures
+- **Maintainability**: Bloat, duplication, organization status
+- **Learning curve**: Ease of understanding for new users
+- **Extensibility**: Ease of adding new features
 
-- **セッション独立性**: 各ラウンドは新しいセッションとして実行
-- **時間管理**: 各ラウンド 5-10分を目安に
-- **具体性重視**: 抽象的指摘ではなく、ファイル名:行番号を明記
-- **建設的姿勢**: 問題指摘だけでなく、解決策も提示
+---
 
-## 実装例
+## 📊 Integrated Report Format
 
-### CLAUDE.md のレビュー例
+After all rounds complete, generate an integrated report in the following format:
 
-```bash
-/iterative-review ~/.claude/CLAUDE.md
+```markdown
+# 🔄 Iterative Review Results
+
+## 📋 Basic Information
+- **Target**: [filename/directory/MR number]
+- **Type**: [TypeScript/Python/Document, etc.]
+- **Review Date/Time**: [YYYY-MM-DD HH:MM]
+- **Number of Perspectives**: [4 (necessity, security, performance, maintainability)]
+
+---
+
+## 🎯 Round 0: Necessity Review
+
+### Final Decision: 🔴 Recommend Deletion / 🟡 Recommend Simplification / 🟢 Justified Retention
+
+**Reason**: [Specific justification for decision]
+**Alternative**: [Specific alternative means for deletion/simplification case]
+
+---
+
+## 🔒 Round 1: Security Perspective
+[Findings and recommended actions]
+
+## ⚡ Round 2: Performance Perspective
+[Findings and recommended actions]
+
+## 🛠️ Round 3: Maintainability Perspective
+[Findings and recommended actions]
+
+---
+
+## 📊 Overall Evaluation
+
+### Round 0 Decision Result
+
+**🔴 Recommend Deletion** / **🟡 Recommend Simplification** / **🟢 Justified Retention**
+
+> **If Round 0 recommends deletion, detailed improvements from subsequent rounds are treated as reference information**
+
+### Findings Summary
+- 🔴 Critical: [X items]
+- 🟡 Important: [Y items]
+- 🟢 Minor: [Z items]
+
+### Priority Action Plan
+
+#### 🎯 Top Priority (Fundamental response based on Round 0 decision)
+[Specific steps for deletion/simplification/improvement]
+
+#### 🔒 High Priority (Only if retention is justified)
+[Response to Critical Issues]
+
+#### ⚡ Medium Priority (Only if retention is justified)
+[Response to Important Issues]
+
+### Overall Observations
+
+#### Round 0 Decision Impact
+- **Recommend deletion**: This feature is fundamentally unnecessary. No need to implement subsequent improvement proposals.
+- **Recommend simplification**: Current implementation is excessive. Prioritize major simplification; defer minor improvements.
+- **Justified retention**: Clear value exists; worth implementing the following improvements.
+
+#### Overall Assessment
+[Comprehensive direction considering Round 0 decision]
 ```
 
-**Round 1 (セキュリティ)**:
-- 機密情報の記載有無
-- 外部リンクの安全性
-- 実行コマンドの安全性
+---
 
-**Round 2 (パフォーマンス)**:
-- ファイルサイズ肥大化
-- 読み込み時間への影響
-- 検索効率
+## ⚠️ Notes
 
-**Round 3 (保守性)**:
-- セクション重複
-- リンク切れ
-- 古い情報の更新
-- 構造の整理状況
+- **Session independence**: Each round executes as a new session
+- **Time management**: Target 5-10 minutes per round
+- **Emphasis on specifics**: Specify filename:line number, not abstract issues
+- **Constructive attitude**: Present solutions, not just problem identification
 
-## エラーハンドリング
+---
 
-### 対象不存在時の処理
+## 🔗 Additional Notes
 
-```bash
-# ファイル/ディレクトリ存在確認
-if [[ ! -e "$TARGET" ]]; then
-    echo "❌ エラー: '$TARGET' が見つかりません"
-
-    # 類似ファイル名の検索（did-you-mean風）
-    SIMILAR_FILES=$(find . -maxdepth 3 -name "*$(basename "$TARGET" | head -c 5)*" 2>/dev/null | head -5)
-    if [[ -n "$SIMILAR_FILES" ]]; then
-        echo "🔍 類似ファイル:"
-        echo "$SIMILAR_FILES" | sed 's/^/  - /'
-    fi
-
-    # タイポチェック（共通パターン）
-    DIRNAME=$(dirname "$TARGET")
-    BASENAME=$(basename "$TARGET")
-
-    # 拡張子チェック
-    case "$BASENAME" in
-        *.ts) ALT_EXT="${BASENAME%.ts}.tsx" ;;
-        *.tsx) ALT_EXT="${BASENAME%.tsx}.ts" ;;
-        *.md) ALT_EXT="${BASENAME%.md}.mdx" ;;
-    esac
-
-    if [[ -n "$ALT_EXT" && -f "$DIRNAME/$ALT_EXT" ]]; then
-        echo "💡 もしかして: $DIRNAME/$ALT_EXT"
-    fi
-
-    exit 1
-fi
-```
-
-### 視点オプション不正時の処理
-
-```bash
-# サポート視点の定義
-SUPPORTED_PERSPECTIVES="security,performance,maintainability,accessibility,i18n,testing,documentation,consistency,scalability"
-
-# 視点バリデーション
-validate_perspectives() {
-    local input_perspectives="$1"
-    local invalid_perspectives=""
-
-    IFS=',' read -ra PERSPECTIVE_ARRAY <<< "$input_perspectives"
-    for perspective in "${PERSPECTIVE_ARRAY[@]}"; do
-        if [[ ",$SUPPORTED_PERSPECTIVES," != *",$perspective,"* ]]; then
-            invalid_perspectives="$invalid_perspectives,$perspective"
-        fi
-    done
-
-    if [[ -n "$invalid_perspectives" ]]; then
-        echo "❌ 未対応の視点: ${invalid_perspectives#,}"
-        echo "✅ サポート視点: $SUPPORTED_PERSPECTIVES"
-
-        # スペル修正提案（簡易版）
-        for invalid in ${invalid_perspectives//,/ }; do
-            case "$invalid" in
-                sec*) echo "💡 もしかして: security" ;;
-                perf*|performance*) echo "💡 もしかして: performance" ;;
-                maintain*|maint*) echo "💡 もしかして: maintainability" ;;
-                access*|a11y) echo "💡 もしかして: accessibility" ;;
-                test*) echo "💡 もしかして: testing" ;;
-                doc*) echo "💡 もしかして: documentation" ;;
-            esac
-        done
-
-        echo "🔄 デフォルト視点を使用: security,performance,maintainability"
-        PERSPECTIVES="security,performance,maintainability"
-    fi
-}
-```
-
-### 大規模ディレクトリ処理時の制限
-
-```bash
-# ディレクトリサイズチェック
-check_directory_size() {
-    local target_dir="$1"
-    local file_count
-
-    file_count=$(find "$target_dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.md" \) \
-        ! -path "*/node_modules/*" ! -path "*/.git/*" | wc -l)
-
-    if [[ $file_count -gt 500 ]]; then
-        echo "⚠️  警告: $file_count ファイル検出（制限: 500ファイル）"
-        echo "   以下のオプションを選択してください:"
-        echo "   1) 上位ディレクトリのみレビュー（-maxdepth 2）"
-        echo "   2) ファイル種別を限定（*.ts のみ等）"
-        echo "   3) そのまま実行（時間がかかります）"
-        echo "   4) キャンセル"
-        read -p "選択 (1-4): " choice
-
-        case $choice in
-            1) FIND_OPTS="-maxdepth 2" ;;
-            2)
-                echo "対象拡張子を選択: ts, tsx, md, py, js"
-                read -p "拡張子 (カンマ区切り): " exts
-                # 実装省略
-                ;;
-            3) echo "大規模レビューを開始..." ;;
-            4) exit 0 ;;
-            *) echo "無効な選択です"; exit 1 ;;
-        esac
-    fi
-}
-```
-
-## 視点拡張設計
-
-### 視点定義の外部化（実装予定）
-
-```yaml
-# ~/.claude/review-perspectives.yaml
-security:
-  name: セキュリティ視点
-  description: OWASP Top 10対応、機密情報保護
-  checks:
-    - input_validation: 入力検証の適切性
-    - output_escaping: XSS/インジェクション対策
-    - authentication: 認証・認可の実装
-    - secrets: ハードコードされた機密情報
-  scripts:
-    - 'rg -i "password|api_key|secret|token" --type typescript'
-    - 'rg "dangerouslySetInnerHTML|eval\(" --type typescript'
-  weight: critical
-
-performance:
-  name: パフォーマンス視点
-  description: 計算量、メモリ効率、レンダリング最適化
-  checks:
-    - complexity: アルゴリズムの計算量
-    - n_plus_one: データベース・API効率性
-    - memory_leaks: メモリリーク検出
-    - bundle_size: バンドルサイズ最適化
-  scripts:
-    - 'rg "for.*await|while.*await|\.map\(async" --type typescript'
-    - 'find . -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | head -10'
-  weight: important
-
-# カスタム視点の例
-accessibility:
-  name: アクセシビリティ視点
-  description: WCAG 2.1準拠、スクリーンリーダー対応
-  checks:
-    - semantic_html: セマンティックHTML使用
-    - alt_text: 画像代替テキスト
-    - keyboard_navigation: キーボード操作対応
-    - color_contrast: 色彩コントラスト比
-  scripts:
-    - 'rg "img.*(?!alt=)" --type typescript'
-    - 'rg "onClick.*(?!onKeyPress)" --type typescript'
-  weight: important
-```
-
-### プラグイン方式の検討
-
-```bash
-# 視点プラグインの追加（将来計画）
-claude-review add-perspective security-advanced ./security-advanced.yaml
-claude-review add-perspective custom-style ./my-style-guide.yaml
-
-# プロジェクト固有視点
-# project/.claude/review-perspectives/project-specific.yaml
-```
+For implementation details and examples, refer to the code samples provided throughout this document.
