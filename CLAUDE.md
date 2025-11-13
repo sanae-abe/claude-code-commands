@@ -16,6 +16,16 @@
 3. 都度確認 → ユーザーフィードバック
 4. 最終統合 → 全体テスト・品質確認
 
+**ドキュメント駆動実装（tasks.yml使用時）**:
+- 実装前に参照ドキュメントを必ずRead（設計書、API仕様等）
+- ドキュメントの要件・制約に厳密に従う
+- acceptance_criteriaを実装完了の判断基準とする
+
+**TDD原則（テストが必要な場合）**:
+- Red: テストを先に書く（失敗を確認）
+- Green: 最小限の実装でテストを通す
+- Refactor: 重複排除、設計改善
+
 #### 実装フェーズのデフォルト動作原則
 以下の原則を実装フェーズでは常に適用：
 
@@ -56,6 +66,32 @@
 - **動的言語**: リンター・フォーマッター・テストカバレッジ
 - **セキュリティ**: OWASP対応・入力検証・出力エスケープ
 - **テスト**: 新機能カバレッジ・既存機能影響確認
+
+#### 5層品質ゲートシステム {#quality-gates}
+
+**多層検証による段階的品質保証**:
+
+**Layer 1-2: 構文・フォーマット (syntax)**
+- TypeScript型チェック (`npx tsc --noEmit`)
+- ESLint (`npx eslint . --ext .ts,.tsx`)
+- Prettier (`npx prettier --check`)
+- 自動修正: `--auto-fix` フラグで対応
+
+**Layer 5: セキュリティ (security)** - **最重要**
+- .env変更検出 (`~/.claude/validation/check-env-changes.sh`)
+- 認証情報パターンスキャン (API_KEY, SECRET, TOKEN等)
+- OWASP Top 10チェックリスト
+- パターン辞書: `~/.claude/validation/security-patterns.json`
+
+**Layer 3-4: セマンティック・統合 (integration)**
+- テストカバレッジ (`npm test -- --coverage`)
+- API型整合性チェック（フロント/バックエンド）
+
+**実行コマンド**:
+- `/task-validate --layers=security` - セキュリティ検証のみ
+- `/task-validate --layers=syntax --auto-fix` - 構文チェック+自動修正
+- `/task-validate --layers=all --report=json` - 全層検証+JSON出力
+- `/task-validate --layers=security,syntax` - 複数層指定
 
 ### 4. タスク完了・クリーンアップ
 
@@ -147,26 +183,39 @@ ELSE:
 - 情報検索・質問への回答
 - 単純なコマンド実行
 
+### ドキュメント駆動タスク管理 {#doc-driven-tasks}
+
+**tasks.yml による構造化タスク管理**:
+- プロジェクトルートに `tasks.yml` を配置
+- 各タスクに `docs` 配列でドキュメント参照を記載
+- `/implement` コマンドが自動的にドキュメントコンテキストを注入
+
+**tasks.yml 構造**:
+```yaml
+- id: task-1
+  goal: "実装目標"
+  status: pending
+  docs:
+    - "docs/design.md#SectionName"
+    - "docs/api-spec.md#Endpoint"
+  acceptance_criteria:
+    - "受入基準1"
+    - "受入基準2"
+```
+
+**実装ワークフロー**:
+1. `/implement task-1` 実行
+2. `docs` 配列の全ドキュメントセクションを自動Read
+3. コンテキスト注入して実装開始
+4. 完了時に `status: completed` に自動更新
+
 ## トラブル対応 {#troubleshooting}
 
-### エラー・バグ発生時
-1. エラー発生 → 再現手順確認
-2. 現象確認 → ログ分析
-3. 原因特定 → デバッグ実施
-4. 修正実装 → 最小限の修正
-5. 検証 → 回帰テスト
-
-### 認識齟齬発生時
-1. 齟齬発生 → 議論停止・情報収集
-2. 事実確認 → WebFetch仕様確認
-3. 選択肢提示 → 複数案提示
-4. 合意形成 → 技術的妥協点
-5. 実装継続 → 学習記録作成
-
-### 対応指針
+**判断基準**:
 - **曖昧指示**: AskUserQuestionで選択肢提示
-- **技術疑問**: WebFetch仕様確認 + 複数案提示
-- **緊急時**: セキュリティ必須、他簡略化可
+- **技術不明**: WebFetch仕様確認 + 複数案提示
+- **認識齟齬**: 停止 → 事実確認 → 学習記録作成
+- **緊急時**: セキュリティ優先、他簡略化可
 
 ---
 
@@ -263,6 +312,38 @@ ELSE:
 **4. MCP活用**
 - IDE MCP: 診断情報（ESLint、TypeScript等）、コード実行
 - Serena MCP: シンボリック編集でファイル全体読み込み回避
+
+### エージェントメタデータ制約 {#agent-metadata}
+
+**フロントマターによる安全性制御**:
+
+**.agent.md ファイル構造**:
+```yaml
+---
+model: claude-sonnet-4-5-20250929
+tools: [Read, Grep, Glob]
+security_level: high
+readonly: true
+forbidden_paths: [~/.ssh/*, ~/.aws/*, .env*]
+max_turns: 20
+---
+```
+
+**セキュリティレベル別制約**:
+- `high`: Read/Grep/Globのみ許可（読み取り専用）
+- `medium`: Write/Edit許可、Bash/WebFetch禁止
+- `low`: 全ツール許可、forbidden_pathsのみ制限
+
+**パス制限パターン**:
+- `~/.ssh/*`, `~/.aws/*` - 認証情報ディレクトリ
+- `.env*`, `credentials.*`, `secrets.*` - 環境変数・機密ファイル
+- `/etc/*`, `/usr/*` - システムディレクトリ
+
+**実行フロー**:
+1. `.agent.md` のフロントマターをパース
+2. `tools` リストから許可ツールを抽出
+3. `forbidden_paths` でパスアクセスを制限
+4. ツール実行時に制約を検証
 
 ---
 
@@ -423,9 +504,24 @@ team_size: 3-5           # チーム規模
 
 ## 外部設定参照 {#external-refs}
 
-- 技術判断時: `~/.claude/stacks/{tech}.md`
-- エラー調査時: `~/.claude/learnings/*.md`
-- Figma連携時: `~/.claude/docs/mcp-figma-rules.md`
+**開発時参照**:
+- 技術判断: `~/.claude/stacks/{tech}.md`
+- 品質検証: `~/.claude/validation/layers/*.md`
+- セキュリティパターン: `~/.claude/validation/security-patterns.json`
+- OWASPチェックリスト: `~/.claude/validation/owasp-top10-checklist.md`
+- スキーマ定義: `~/.claude/schemas/*.json`
+- テンプレート: `~/.claude/templates/*.yml`
+- ユーティリティ: `~/.claude/utils/*.py`
+- エージェント: `~/.claude/agents/*.agent.md`
+- エラー調査: `~/.claude/learnings/*.md`
+
+**機能別参照**:
+- AutoFlow統合: `~/.claude/docs/autoflow-integration-guide.md`
+- Figma連携: `~/.claude/docs/mcp-figma-rules.md`
+
+**コマンド実装**:
+- /implement: `commands/implement.md`
+- /task-validate: `commands/task-validate.md`
 
 ---
 

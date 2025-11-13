@@ -1,5 +1,5 @@
 ---
-allowed-tools: TodoWrite, SlashCommand, Read, Write, Bash
+allowed-tools: TodoWrite, SlashCommand, Read, Bash
 argument-hint: "<task-name> [--perspectives=security,performance,maintainability] [--rounds=2] [--format=detailed|compact]"
 description: Create implementation plan, review with iterative-review, update tasks.yml
 model: sonnet
@@ -29,20 +29,29 @@ Parse $ARGUMENTS to extract:
 - --format flag (optional, default: detailed, values: detailed|compact)
 
 Validation rules:
-- Task name: max 500 characters, reject ../ patterns, reject control characters
+- Task name: max 500 characters, reject control characters
 - Perspectives: validate against allowed list (security, performance, maintainability, accessibility, testing, documentation)
 - Rounds: must be integer 1-5
 - Format: must be "detailed" or "compact"
 
+Security validation (execute before any operations):
+1. Task name path traversal check:
+   - Normalize with realpath -m
+   - Verify result stays within project root (git rev-parse --show-toplevel)
+   - Reject if contains control characters or null bytes
+2. Perspectives command injection check:
+   - Split by comma, validate each against allowed list
+   - Reject if contains shell metacharacters: ; | & $ ` ( ) < > \ " '
+   - Use only validated perspective names in SlashCommand
+3. Temporary file security:
+   - Use mktemp with restrictive permissions (600)
+   - Set trap 'rm -f "$TMPFILE"' EXIT INT TERM at script start
+   - Never expose temp file absolute paths in error messages
+
 If task name missing: use AskUserQuestion to collect task description
 If invalid flag value: report error with allowed values and exit
 If invalid format: report expected format and exit
-
-Security:
-- Reject path traversal patterns (../, ~/)
-- Escape all arguments before passing to SlashCommand
-- Use mktemp for temporary files
-- Set trap to cleanup temporary files on exit
+If security validation fails: report "Invalid input detected" and exit
 
 ## Tool Usage
 
@@ -57,7 +66,10 @@ Update status to "in_progress" before each step
 Update status to "completed" after each step
 
 SlashCommand: Execute dependent commands:
-- /iterative-review plan.md --skip-necessity --perspectives=$PERSPECTIVES --rounds=$ROUNDS
+- /iterative-review <temp-file-basename> --skip-necessity --perspectives=<validated-perspectives> --rounds=<validated-rounds>
+- Use only validated perspective values (already checked against allowed list)
+- Use basename of temp file, not absolute path
+- Never interpolate unvalidated variables into command
 
 Bash: File operations and validation:
 - Create temporary plan.md using mktemp
@@ -130,7 +142,15 @@ For each task from plan and review results:
 Python implementation:
 ```python
 import yaml
+import re
 from datetime import datetime
+
+def sanitize_yaml_string(s: str) -> str:
+    """Sanitize string for safe YAML insertion."""
+    # Reject YAML tags, anchors, aliases, and flow indicators
+    if re.search(r'!!|&|\*|^[>|]|[\x00-\x1f\x7f]', s):
+        raise ValueError(f"Invalid characters in YAML string")
+    return s
 
 # Load existing tasks.yml
 with open('tasks.yml', 'r') as f:
@@ -140,23 +160,23 @@ with open('tasks.yml', 'r') as f:
 existing_ids = [int(t['id'].split('-')[1]) for t in data.get('tasks', []) if t['id'].startswith('task-')]
 next_id = max(existing_ids, default=0) + 1
 
-# Append new task
+# Sanitize all user input before insertion
 new_task = {
     'id': f'task-{next_id}',
-    'goal': goal,
+    'goal': sanitize_yaml_string(goal),
     'status': 'pending',
-    'priority': priority,
-    'effort': effort,
+    'priority': priority,  # Already validated to be high/medium/low
+    'effort': sanitize_yaml_string(effort),
     'type': 'implementation',
-    'acceptance_criteria': acceptance_criteria
+    'acceptance_criteria': [sanitize_yaml_string(c) for c in acceptance_criteria]
 }
 
 data['tasks'].append(new_task)
 data['project']['last_updated'] = datetime.utcnow().isoformat() + 'Z'
 
-# Write back
+# Write back using safe_dump (not dump)
 with open('tasks.yml', 'w') as f:
-    yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
 ```
 
 Handle batch updates:
@@ -188,11 +208,12 @@ If invalid rounds: report "Invalid rounds value. Must be integer 1-5"
 If invalid format: report "Invalid format. Must be: detailed or compact"
 
 Execution errors:
-If /iterative-review fails: report "/iterative-review failed. Plan saved to plan.md for manual review"
-If tasks.yml write fails: report "tasks.yml write failed. Tasks saved to plan-final.yml for manual merge"
-If plan.md creation fails: report "Failed to create plan.md" and exit
+If /iterative-review fails: report "/iterative-review failed. Plan saved to temporary file for manual review"
+If tasks.yml write fails: report "tasks.yml write failed. Tasks saved to fallback file for manual merge"
+If plan.md creation fails: report "Failed to create plan file" and exit
 If config file invalid JSON: report "Config file invalid JSON format. Using defaults"
-If YAML parsing fails: report "tasks.yml is invalid YAML. Backup created as tasks.yml.bak"
+If YAML parsing fails: report "tasks.yml is invalid YAML. Backup created"
+If YAML sanitization fails: report "Invalid characters detected in task data" and exit
 
 Dependency errors:
 If /iterative-review command not found: report "/iterative-review command not available. Install iterative-review.md"
