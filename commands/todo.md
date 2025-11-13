@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, TodoWrite, Grep, Glob
-argument-hint: "[action] [description] | add | complete | list | sync | project | interactive"
+argument-hint: "[action] [description] | add | complete | uncomplete | remove | list | sync | project | interactive"
 description: Simple project task management with interactive UI and priority handling
 model: sonnet
 ---
@@ -13,7 +13,7 @@ Arguments: $ARGUMENTS
 
 1. Parse arguments from $ARGUMENTS
 2. Validate and sanitize input (security check)
-3. Determine action: add, complete, list, remove, undo, next, or interactive mode
+3. Determine action: add, complete, uncomplete, remove, list, sync, project, next, or interactive mode
 4. Locate or create todos.md file in project root
 5. Execute requested action
 6. Update todos.md file if modifications made
@@ -26,9 +26,9 @@ If validation fails: report error and exit
 ## Argument Parsing
 
 Parse $ARGUMENTS to extract:
-- Action: first token (add, complete, list, remove, undo, next)
+- Action: first token (add, complete, uncomplete, remove, list, sync, project, next, interactive)
 - Task description: quoted string for add action
-- Task number: integer for complete, remove, undo actions
+- Task number: integer for complete, uncomplete, remove actions
 - Options: --priority, --context, --due, --filter, --sort
 
 Sanitize input:
@@ -93,13 +93,14 @@ list [options]:
 - Apply --sort (due, priority)
 - Show task numbers for reference
 
+uncomplete N:
+- Parse task number N
+- Revert completed task to incomplete ([ ])
+- Update todos.md
+
 remove N | delete N:
 - Parse task number N
 - Remove task from todos.md
-
-undo N:
-- Parse task number N
-- Revert completed task to incomplete ([ ])
 
 next:
 - Find next priority task considering due date and priority
@@ -143,6 +144,12 @@ Action: Add high-priority API task with tomorrow due date
 
 Input: /todo complete 1
 Action: Mark task 1 as completed
+
+Input: /todo uncomplete 1
+Action: Revert task 1 to incomplete status
+
+Input: /todo remove 2
+Action: Delete task 2 from todos.md
 
 Input: /todo list --filter priority:high --sort due
 Action: List high-priority tasks sorted by due date
