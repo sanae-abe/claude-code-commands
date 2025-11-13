@@ -1,7 +1,7 @@
 ---
 allowed-tools: TodoWrite, SlashCommand, Read, Write, Bash
 argument-hint: "<task-name> [--perspectives=security,performance,maintainability] [--rounds=2] [--format=detailed|compact]"
-description: Create implementation plan, review with iterative-review, update todo.md
+description: Create implementation plan, review with iterative-review, update tasks.yml
 model: sonnet
 ---
 
@@ -17,7 +17,7 @@ Arguments: $ARGUMENTS
 4. Generate plan.md with task details
 5. Execute /iterative-review on plan.md
 6. Parse review results
-7. Update todo.md via /todo add commands
+7. Update tasks.yml with new tasks
 8. Generate final report
 
 ## Argument Validation
@@ -51,14 +51,13 @@ TodoWrite: Create 5-step task list at start:
 2. Create task breakdown and plan.md
 3. Execute /iterative-review
 4. Parse review results
-5. Update todo.md and generate report
+5. Update tasks.yml and generate report
 
 Update status to "in_progress" before each step
 Update status to "completed" after each step
 
 SlashCommand: Execute dependent commands:
 - /iterative-review plan.md --skip-necessity --perspectives=$PERSPECTIVES --rounds=$ROUNDS
-- /todo add "$TASK_CONTENT" --priority=$PRIORITY --depends-on="$DEPENDENCY"
 
 Bash: File operations and validation:
 - Create temporary plan.md using mktemp
@@ -105,18 +104,65 @@ Parse review results:
 - Identify new tasks from recommendations
 - Update time estimates based on review findings
 
-## Todo Update Process
+## tasks.yml Update Process
+
+Auto-create tasks.yml if missing:
+```bash
+if [ ! -f "tasks.yml" ]; then
+  cat > tasks.yml << 'EOF'
+project:
+  name: "Project Tasks"
+  last_updated: ""
+
+tasks: []
+EOF
+fi
+```
 
 For each task from plan and review results:
-1. Determine task content
-2. Assign priority based on review severity (Critical -> high, Important -> medium, Minor -> low)
-3. Identify dependencies
-4. Execute /todo add with appropriate flags
+1. Generate unique task ID (find max existing task-N, increment)
+2. Determine task goal from plan
+3. Assign priority based on review severity (Critical -> high, Important -> medium, Minor -> low)
+4. Extract effort estimate from plan
+5. Identify acceptance criteria from review
+6. Append to tasks.yml using Python YAML manipulation
+
+Python implementation:
+```python
+import yaml
+from datetime import datetime
+
+# Load existing tasks.yml
+with open('tasks.yml', 'r') as f:
+    data = yaml.safe_load(f)
+
+# Find next task ID
+existing_ids = [int(t['id'].split('-')[1]) for t in data.get('tasks', []) if t['id'].startswith('task-')]
+next_id = max(existing_ids, default=0) + 1
+
+# Append new task
+new_task = {
+    'id': f'task-{next_id}',
+    'goal': goal,
+    'status': 'pending',
+    'priority': priority,
+    'effort': effort,
+    'type': 'implementation',
+    'acceptance_criteria': acceptance_criteria
+}
+
+data['tasks'].append(new_task)
+data['project']['last_updated'] = datetime.utcnow().isoformat() + 'Z'
+
+# Write back
+with open('tasks.yml', 'w') as f:
+    yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+```
 
 Handle batch updates:
-- If 5+ tasks: execute /todo add commands sequentially
-- Track success/failure of each add operation
-- If any add fails: save remaining tasks to plan-final.md
+- Process all tasks in single Python script execution
+- Track success/failure of YAML operations
+- If YAML write fails: save tasks to plan-final.yml for manual merge
 
 ## Report Generation
 
@@ -143,13 +189,15 @@ If invalid format: report "Invalid format. Must be: detailed or compact"
 
 Execution errors:
 If /iterative-review fails: report "/iterative-review failed. Plan saved to plan.md for manual review"
-If /todo add fails: report "/todo add failed. Tasks saved to plan-final.md for manual update"
+If tasks.yml write fails: report "tasks.yml write failed. Tasks saved to plan-final.yml for manual merge"
 If plan.md creation fails: report "Failed to create plan.md" and exit
 If config file invalid JSON: report "Config file invalid JSON format. Using defaults"
+If YAML parsing fails: report "tasks.yml is invalid YAML. Backup created as tasks.yml.bak"
 
 Dependency errors:
 If /iterative-review command not found: report "/iterative-review command not available. Install iterative-review.md"
-If /todo command not found: report "/todo command not available. Install todo.md"
+If python3 not available: report "Python 3 required for tasks.yml manipulation"
+If PyYAML not installed: report "PyYAML required. Install with: pip install pyyaml"
 
 Security:
 Never expose absolute paths in error messages
@@ -179,16 +227,54 @@ If config file exists:
 ## Examples
 
 Input: /plan-review "User authentication feature"
-Action: Create plan for authentication feature, review with default perspectives (security, performance, maintainability) for 2 rounds, update todo.md with detailed report
+Action: Create plan for authentication feature, review with default perspectives (security, performance, maintainability) for 2 rounds, append tasks to tasks.yml with detailed report
+
+Output tasks.yml:
+```yaml
+tasks:
+  - id: task-1
+    goal: "Implement login endpoint with JWT"
+    status: pending
+    priority: high
+    effort: 4h
+    type: implementation
+    acceptance_criteria:
+      - "POST /api/login accepts email/password"
+      - "Returns JWT token on success"
+      - "Returns 401 on invalid credentials"
+  - id: task-2
+    goal: "Add token refresh mechanism"
+    status: pending
+    priority: high
+    effort: 2h
+    type: implementation
+    acceptance_criteria:
+      - "Refresh token stored in httpOnly cookie"
+      - "Refresh endpoint returns new access token"
+```
 
 Input: /plan-review "API cache layer" --perspectives=security,performance
-Action: Create plan for cache layer, review with security and performance only, update todo.md
+Action: Create plan for cache layer, review with security and performance only, append tasks to tasks.yml
 
 Input: /plan-review "Button component refactor" --rounds=1 --format=compact
-Action: Create plan for refactor, quick 1-round review, update todo.md with compact summary
+Action: Create plan for refactor, quick 1-round review, append tasks to tasks.yml with compact summary
 
 Input: /plan-review
 Action: Use AskUserQuestion to collect task description, then execute with defaults
 
 Input: /plan-review "Large feature" --perspectives=invalid
 Action: Report error: "Invalid perspective. Allowed: security, performance, maintainability, accessibility, testing, documentation" and exit
+
+## Integration with /implement and /todo
+
+After /plan-review completion:
+
+**View tasks**: `/todo sync` to import tasks.yml tasks to todos.md
+**Start implementation**: `/todo next` → confirms → `/implement task-1`
+**Direct implementation**: `/implement task-1` directly
+
+Workflow:
+1. `/plan-review "Feature name"` → generates tasks in tasks.yml
+2. `/todo sync` → imports to todos.md for visibility
+3. `/todo next` → picks next task and asks to run /implement
+4. `/implement task-N` → executes with full context from tasks.yml
