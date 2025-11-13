@@ -445,35 +445,18 @@ team_size: 3-5           # チーム規模
 
 ---
 
-## 関連ドキュメント {#related-docs}
+## 外部設定参照 {#external-refs}
 
-- **ユーザーガイド**: `~/.claude/USER_GUIDE.md` (コマンド一覧・使い方)
-- **スラッシュコマンド**: `~/.claude/commands/` (効率化ワークフロー)
-- **技術スタック設定**: `~/.claude/stacks/` (技術別専門設定)
-- **プロジェクト設定**: `~/.claude/project-configs/`
-- **学習記録**: `~/.claude/learning-sessions/`
-- **詳細ケーススタディ**: `~/.claude/docs/case-studies.md`
-- **実装予定機能**: `~/.claude/docs/roadmap.md`
-- **コマンド実装状況**: `~/.claude/docs/command-dashboard.md`
+- 技術判断時: `~/.claude/stacks/{tech}.md`
+- エラー調査時: `~/.claude/learnings/*.md`
+- Figma連携時: `~/.claude/docs/mcp-figma-rules.md`
 
 ---
 
-## 学習記録活用（cldev統合）
+## 学習記録参照 {#learning-records}
 
-### 学習記録の場所
-`~/.claude/learning-sessions/*.md`
-
-### 自動参照推奨タイミング
-- `/urgent`, `/fix`, `/debug` 実行時
-- エラー調査時（過去の類似問題確認）
-- 技術的決定の背景確認
-
-### 記録フォーマット
-各学習記録は以下を含む：
-- 問題の説明
-- 根本原因
-- 解決策
-- 重要な学び
-- 関連ファイル
+- 参照タイミング: エラー調査・技術決定時
+- 検索コマンド: `cldev lr suggest "[エラーメッセージ]"` または `cldev lr find "[キーワード]"`
+- 記録場所: `~/.claude/learnings/*.md`
 
 ---
