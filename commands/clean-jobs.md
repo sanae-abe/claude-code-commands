@@ -7,49 +7,39 @@ model: sonnet
 
 # Background Job Cleanup
 
-> **Version**: 1.1.0
-> **Last Updated**: See Git history
-> **Related Commands**: `/web-dev`, `/api-dev`, `/ds-notebook`
-
-## Overview
+Arguments: None (interactive)
 
 Safely cleans up only background jobs created in the current Claude Code session.
-Does not affect other Claude Code sessions.
-
-**Intended Use Cases**:
-- Cleanup after long development sessions
-- Manual stop of processes started by `/web-dev` etc.
-- Periodic job cleanup for memory conservation
+Does not affect other Claude Code sessions or separate terminal processes.
 
 ## Execution Flow
 
-1. **Check background jobs in current session**
-2. **Present job list to user**
-3. **Present cleanup method choices** (AskUserQuestion)
-4. **Execute based on selection**
+1. Check background jobs in current session
+2. Present cleanup options via AskUserQuestion
+3. Execute based on user selection
+4. Verify and report results
 
-## Implementation Steps
+## Tool Usage
+
+AskUserQuestion: Present cleanup method selection with 3 options (clean all, select individually, cancel)
+
+## Implementation Details
 
 ### Step 1: Check Current Jobs
 
-First, check background jobs in the current session with `jobs -l`.
+Check background jobs with `jobs -l`.
 
 ```bash
 jobs -l
 ```
 
-**If 0 jobs:**
-Display:
-```
-✅ No background jobs to clean up
-```
-and exit.
+If no jobs exist:
+- Report "No background jobs to clean up"
+- Exit
 
 ### Step 2: Present Cleanup Options
 
-**If jobs exist:**
-
-Use AskUserQuestion tool to present the following options:
+Use AskUserQuestion with the following options:
 
 ```json
 {
@@ -75,47 +65,67 @@ Use AskUserQuestion tool to present the following options:
 }
 ```
 
-### Step 3: Execute
+### Step 3: Execute Based on Selection
 
-Execute based on selection:
-
-#### Clean up all
+#### Option A: Clean up all
 
 ```bash
-# Get all job PIDs and kill (optimized with arrays)
+# Helper function: validate PID format
+validate_pid() {
+    local pid=$1
+    [[ "$pid" =~ ^[0-9]+$ ]]
+}
+
+# Get all job PIDs
 pids=($(jobs -p))
 
 if [[ ${#pids[@]} -gt 0 ]]; then
-    # Performance optimization with batch kill
-    if kill "${pids[@]}" 2>&1; then
-        echo "✅ All jobs cleaned up"
+    # Batch kill (single system call for performance)
+    if kill "${pids[@]}" 2>/dev/null; then
+        echo "All ${#pids[@]} jobs cleaned up"
     else
-        echo "⚠️  Some jobs failed to clean up"
-        jobs -l  # Display remaining jobs
+        # Fallback: count successful kills
+        killed_count=0
+        for pid in "${pids[@]}"; do
+            validate_pid "$pid" && kill "$pid" 2>/dev/null && ((killed_count++))
+        done
+        echo "$killed_count jobs cleaned up"
+        echo "Some jobs may have already terminated"
     fi
 else
-    echo "✅ No jobs to clean up"
+    echo "No jobs to clean up"
 fi
 ```
 
-#### Select individually
+#### Option B: Select individually
 
-**Receive input from AskUserQuestion "Other" option:**
-- Prompt user for input in "1 3 5" format
-- Example input: `1 3 5`
+Receive input from AskUserQuestion "Other" field.
+Expected format: space-separated job numbers (e.g., "1 3 5")
 
 ```bash
-# Input from AskUserQuestion
-# $USER_INPUT is input from "Other" field
+# Input from AskUserQuestion "Other" field
 job_numbers="$USER_INPUT"
 
-# Input validation: only numbers and spaces allowed
-if [[ ! "$job_numbers" =~ ^[0-9\ ]+$ ]]; then
-    echo "❌ Error: Job numbers must be digits and spaces only (example: 1 3 5)"
+# Input validation: empty check
+if [[ -z "$job_numbers" ]]; then
+    echo "Error: No job numbers provided"
     exit 1
 fi
 
-# Race condition prevention: pre-fetch job PIDs
+# Input validation: format check (digits and spaces only)
+if [[ ! "$job_numbers" =~ ^[0-9\ ]+$ ]]; then
+    echo "Error: Job numbers must be digits and spaces only"
+    echo "Example: 1 3 5"
+    exit 1
+fi
+
+# Input validation: length limit (DoS prevention)
+if [[ ${#job_numbers} -gt 100 ]]; then
+    echo "Error: Input too long (max 100 characters)"
+    exit 1
+fi
+
+# Race condition prevention: pre-fetch PIDs
 pids=()
 failed_jobs=()
 
@@ -128,50 +138,90 @@ for job_num in $job_numbers; do
     fi
 done
 
-# Batch kill collected PIDs
-killed_count=0
-for pid in "${pids[@]}"; do
-    if kill "$pid" 2>/dev/null; then
-        ((killed_count++))
+# Batch kill (performance optimization)
+if [[ ${#pids[@]} -gt 0 ]]; then
+    if kill "${pids[@]}" 2>/dev/null; then
+        killed_count=${#pids[@]}
+        echo "$killed_count jobs cleaned up"
+    else
+        # Fallback: count successful kills
+        killed_count=0
+        for pid in "${pids[@]}"; do
+            validate_pid "$pid" && kill "$pid" 2>/dev/null && ((killed_count++))
+        done
+        echo "$killed_count jobs cleaned up"
+        echo "Some jobs may have already terminated"
     fi
-done
+fi
 
-# Result report
-echo "✅ $killed_count jobs cleaned up"
+# Report failed job numbers
 if [[ ${#failed_jobs[@]} -gt 0 ]]; then
-    echo "⚠️  Non-existent jobs: ${failed_jobs[*]}"
+    echo "Non-existent jobs: ${failed_jobs[*]}"
 fi
 ```
 
-#### Cancel
+#### Option C: Cancel
 
 Exit without doing anything.
 
 ### Step 4: Verify Results
 
-Check and report state after cleanup:
+Check and report final state:
 
 ```bash
-# Check after cleanup
 remaining_jobs=$(jobs -l)
 
 if [[ -z "$remaining_jobs" ]]; then
-    echo "🎉 All background jobs have been cleaned up"
+    echo "All background jobs have been cleaned up"
 else
-    echo "📋 Remaining jobs:"
+    echo "Remaining jobs:"
     jobs -l
 fi
 ```
 
-## Notes
+## Error Handling
 
-- This command only affects jobs in the **current session**
-- Does not affect other Claude Code sessions or separate terminal processes
-- Individual selection is recommended if important tasks are running
+Input validation errors:
+- If empty input: report "No job numbers provided"
+- If invalid format: report "Job numbers must be digits and spaces only" with example
+- If input too long: report "Input too long (max 100 characters)"
 
-## Security Enhancements (v1.1.0)
+Execution errors:
+- If kill fails: report count of successfully killed jobs
+- If job does not exist: report non-existent job numbers
+- Never expose absolute paths or internal details
 
-- ✅ Unified to AskUserQuestion (eliminated `read` command)
-- ✅ Race condition prevention (pre-fetch PIDs)
-- ✅ Enhanced input validation (regex check)
-- ✅ Performance optimization (use Bash arrays)
+## Examples
+
+Input: /clean-jobs
+Action: Display current jobs and present cleanup options
+
+Input: User selects "Clean up all"
+Action: Kill all jobs, report count
+Output: "All 3 jobs cleaned up"
+
+Input: User selects "Select individually" and enters "1 3 5"
+Action: Kill jobs 1, 3, and 5, report results
+Output: "3 jobs cleaned up"
+
+Input: User selects "Select individually" and enters "1 99"
+Action: Kill job 1, report job 99 does not exist
+Output: "1 jobs cleaned up\nNon-existent jobs: 99"
+
+Input: User selects "Cancel"
+Action: Exit without changes
+
+## Use Cases
+
+- Cleanup after long development sessions
+- Manual stop of processes started by development environment commands
+- Periodic job cleanup for memory conservation
+- Individual selection recommended when important tasks are running
+
+## Session Isolation
+
+This command only affects jobs in the current Claude Code session:
+- Uses `jobs -l` which shows session-scoped jobs only
+- Does not affect other Claude Code sessions
+- Does not affect separate terminal processes
+- OS-level permission controls prevent unauthorized kills

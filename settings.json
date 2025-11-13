@@ -1,0 +1,125 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Funk.aiff && echo '✅ 作業完了!'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "(echo '🤖 $(date +%H:%M:%S) - Agent起動中...' &)"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '❓ $(date +%H:%M:%S) - ユーザーの確認が必要です'"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline-command.sh"
+  },
+  "alwaysThinkingEnabled": false,
+  "tool": {
+    "Read": "approve",
+    "Grep": "approve",
+    "Glob": "approve"
+  },
+  "performance": {
+    "fileOperationTimeout": 30000,
+    "maxConcurrentTasks": 3,
+    "enableProgressIndicators": true
+  },
+  "development": {
+    "codeQuality": {
+      "enforceTypeScript": true,
+      "autoLinting": true,
+      "securityScanEnabled": true
+    }
+  },
+  "ui": {
+    "showTimestamps": true,
+    "verboseLogging": false,
+    "progressAnimations": true,
+    "soundFeedback": true
+  },
+  "security": {
+    "validateFileOperations": true,
+    "restrictedPaths": [
+      "/System",
+      "/usr/bin",
+      "/usr/sbin",
+      "/etc",
+      "/var",
+      "/private",
+      "/tmp",
+      "/opt"
+    ],
+    "blockedFiles": [
+      ".env",
+      ".envrc",
+      ".env.*",
+      "credentials.json",
+      "*.pem",
+      "*.key",
+      "*.pfx",
+      "*_rsa",
+      "*_dsa",
+      "*_ecdsa",
+      "*.p12",
+      "secrets.yml",
+      "secrets.yaml",
+      "*.crt",
+      "*.csr",
+      "auth.json",
+      "token.json",
+      "*.keystore",
+      "id_rsa",
+      "id_dsa",
+      "id_ecdsa"
+    ],
+    "allowedFileTypes": [
+      ".js",
+      ".ts",
+      ".tsx",
+      ".jsx",
+      ".json",
+      ".md",
+      ".css",
+      ".scss",
+      ".html",
+      ".xml",
+      ".yaml",
+      ".yml",
+      ".toml"
+    ]
+  },
+  "logging": {
+    "enableCommandHistory": true,
+    "maxHistorySize": 1000,
+    "logLevel": "info",
+    "timestampFormat": "YYYY-MM-DD HH:mm:ss"
+  },
+  "maxTokens": 100000,
+  "autoSave": false,
+  "telemetry": false
+}

@@ -1,208 +1,233 @@
-# Claude Code Commands
+# Claude Code Workspace
 
-My personal collection of custom Claude Code slash commands and workflows.
+Personal Claude Code configuration workspace with custom commands and development workflows.
 
-## 📋 Table of Contents
+## 📋 Overview
 
-- [Repository Structure](#-repository-structure)
-- [Installation](#-installation)
-  - [Manual Installation](#manual-installation)
-  - [Using Symlinks (Recommended for development)](#using-symlinks-recommended-for-development)
-  - [Updating Commands](#updating-commands)
-- [Available Commands](#-available-commands)
-  - [/todo - Intelligent Task Management](#todo---intelligent-task-management)
-  - [/iterative-review - Multi-Perspective Review](#iterative-review---multi-perspective-review)
-  - [/i18n-check - Internationalization Status Check](#i18n-check---internationalization-status-check)
-  - [/clean-jobs - Safe Background Job Cleanup](#clean-jobs---safe-background-job-cleanup)
-- [Additional Information](#-additional-information)
-- [License](#-license)
+This repository is my personal backup and configuration management for Claude Code:
+
+- Custom slash commands for streamlined workflows
+- Technology stack configurations for different projects
+- LLM-optimized settings for efficient AI-assisted development
+- Integrated skills from Anthropic and community collections
 
 ## 📁 Repository Structure
 
 ```
-claude-code-commands/
-├── commands/           # Custom slash commands
-│   ├── todo.md        # Intelligent task management system
-│   ├── iterative-review.md  # Multi-perspective iterative review
-│   ├── i18n-check.md  # Comprehensive i18n status check
-│   └── clean-jobs.md  # Safe cleanup of background jobs
-├── docs/              # Documentation
-└── scripts/           # Utility scripts
+claude-code-workspace/
+├── commands/              # Custom slash commands (6 commands)
+│   ├── clean-jobs.md     # Safe background job cleanup
+│   ├── i18n-check.md     # Internationalization status check
+│   ├── iterative-review.md  # Multi-perspective code review
+│   ├── plan-review.md    # Implementation planning with review
+│   ├── task-validate.md  # Quality validation and next actions
+│   └── todo.md           # Intelligent task management
+├── stacks/                # Technology stack configurations (6 stacks)
+│   ├── backend-api.md    # Backend API development settings
+│   ├── data-science.md   # Data science workflow settings
+│   ├── frontend-web.md   # Frontend web development settings
+│   ├── mobile-app.md     # Mobile app development settings
+│   ├── rust-cli.md       # Rust CLI development settings
+│   ├── shell-cli.md      # Shell scripting standards (POSIX)
+│   └── slash-command-design.md  # Command design guidelines
+├── skills/                # Integrated Claude skills
+│   ├── anthropic-skills/ # Official Anthropic skills
+│   └── superpowers/      # Community skill collection
+├── CLAUDE.md             # LLM behavior configuration
+├── USER_GUIDE.md         # User-facing documentation
+├── settings.json         # Claude Code system settings
+├── docs/                 # Additional documentation
+├── projects/             # Session history and project data
+└── scripts/              # Utility scripts
 ```
 
-## 🚀 Installation
+## 🚀 Setup
 
-### Manual Installation
+### Installation
 
-Copy commands to your Claude Code commands directory:
+Since this is already set up in my environment at `~/projects/claude-code-workspace`, commands and configurations are symlinked to `~/.claude/`.
+
+To restore from backup or set up on a new machine:
 
 ```bash
-# Copy individual commands
-cp commands/todo.md ~/.claude/commands/
-cp commands/iterative-review.md ~/.claude/commands/
-cp commands/i18n-check.md ~/.claude/commands/
-cp commands/clean-jobs.md ~/.claude/commands/
+# Clone repository
+git clone <this-repo-url> ~/projects/claude-code-workspace
+
+# Link commands
+ln -sf ~/projects/claude-code-workspace/commands/*.md ~/.claude/commands/
+
+# Link configuration files
+ln -sf ~/projects/claude-code-workspace/CLAUDE.md ~/.claude/CLAUDE.md
+ln -sf ~/projects/claude-code-workspace/settings.json ~/.claude/settings.json
+
+# Link stacks
+mkdir -p ~/.claude/stacks
+ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 ```
 
-### Using Symlinks (Recommended for development)
-
-Create symlinks to keep commands in sync with this repository:
+### Verify Setup
 
 ```bash
-# Create symlinks
-ln -sf ~/projects/claude-code-commands/commands/todo.md ~/.claude/commands/todo.md
-ln -sf ~/projects/claude-code-commands/commands/iterative-review.md ~/.claude/commands/iterative-review.md
-ln -sf ~/projects/claude-code-commands/commands/i18n-check.md ~/.claude/commands/i18n-check.md
-ln -sf ~/projects/claude-code-commands/commands/clean-jobs.md ~/.claude/commands/clean-jobs.md
-```
+# Check available commands
+/help
 
-### Updating Commands
-
-**Pull latest changes:**
-
-```bash
-cd ~/projects/claude-code-commands
-git pull
-```
-
-If using symlinks, changes will automatically reflect in `~/.claude/commands/`.
-
-**Backup and push your changes:**
-
-```bash
-git add .
-git commit -m "Update commands"
-git push
+# Test a command
+/todo list
 ```
 
 ## 📚 Available Commands
 
-### `/todo` - Intelligent Task Management
+### Task Management & Planning
 
-Integrated todo management system with Git coordination and interactive UI.
+**`/todo`** - Intelligent task management with Git integration
+- Usage: `/todo add "task"`, `/todo list`, `/todo complete 1`, `/todo sync`
+- Git integration, interactive UI, project-wide analysis
 
-**Usage:**
-```bash
-/todo add "Implement feature X"
-/todo list
-/todo complete 1
-/todo sync          # Sync with Git
-/todo project       # Project-wide analysis
-/todo interactive   # Interactive UI
+**`/plan-review`** - Create implementation plan and review
+- Usage: `/plan-review "feature name" [--rounds=3] [--perspectives=security,performance]`
+- Task breakdown, automatic review, todo.md updates
+
+**`/task-validate`** - Validate task completion and quality
+- Usage: `/task-validate [--scope=lint|test|build] [--report-only] [--auto-proceed]`
+- Quality checks, next action suggestions
+
+### Code Quality & Review
+
+**`/iterative-review`** - Multi-perspective code review
+- Usage: `/iterative-review <target> [--rounds=4] [--perspectives=...] [--skip-necessity]`
+- Round 0: Necessity review (deletion/simplification)
+- Security, performance, maintainability analysis
+
+**`/i18n-check`** - Internationalization status check
+- Usage: `/i18n-check [language] [--coverage|--consistency|--format|--cultural|--complete]`
+- Translation coverage, consistency, format validation
+
+### Utilities
+
+**`/clean-jobs`** - Safe cleanup of background jobs
+- Usage: `/clean-jobs`
+- Session-scoped, interactive cleanup options
+
+## 🎯 Technology Stack Configurations
+
+Available in `stacks/` directory:
+
+1. **frontend-web.md** - React/Vue/Angular, component architecture, state management
+2. **backend-api.md** - REST/GraphQL, database patterns, API security
+3. **mobile-app.md** - iOS/Android, cross-platform frameworks
+4. **data-science.md** - Jupyter, data pipelines, ML/AI workflows
+5. **rust-cli.md** - Rust patterns, CLI frameworks, error handling
+6. **shell-cli.md** - POSIX compliance (52 standards), security practices
+
+### Using Stack Configurations
+
+Automatically applied based on project context, or explicitly set in project `.claude/CLAUDE.md`:
+
+```yaml
+tech_stack: frontend-web
+project_type: spa
+team_size: 3-5
 ```
 
-**Features:**
-- Git integration for commit-based task tracking
-- Interactive dialog UI
-- Project-wide task analysis
-- Automatic synchronization
+## 🛠️ Configuration Files
 
-**Use Cases:**
-- Managing development tasks within coding sessions
-- Tracking feature implementation progress
-- Coordinating tasks with Git commits
-- Project-wide task organization and analysis
+**CLAUDE.md** - LLM behavior configuration
+- Development workflows, code quality standards, security requirements
 
-### `/iterative-review` - Multi-Perspective Review
+**USER_GUIDE.md** - User documentation
+- Command reference, usage patterns, troubleshooting
 
-Iterative code review with multiple security, performance, and maintainability perspectives.
+**settings.json** - System settings
+- Tool permissions, file operation rules, MCP integration
 
-**Usage:**
+## 🔄 Backup & Sync
+
+### Save Changes
+
 ```bash
-/iterative-review <target>
-/iterative-review <target> --rounds=3
-/iterative-review <target> --perspectives=security,performance,maintainability
+cd ~/projects/claude-code-workspace
+git add .
+git commit -m "Update commands and configurations"
+git push
 ```
 
-**Features:**
-- Security-focused analysis (OWASP, XSS, authentication)
-- Performance optimization review
-- Maintainability assessment
-- Multiple review rounds for deep analysis
+### Pull Latest
 
-**Use Cases:**
-- Comprehensive code quality review before merge
-- Security audit of critical components
-- Performance bottleneck identification
-- Documentation and configuration review
-
-### `/i18n-check` - Internationalization Status Check
-
-Comprehensive internationalization (i18n) status check for any project with coverage, consistency, and cultural sensitivity analysis.
-
-**Usage:**
 ```bash
-/i18n-check [language-code]
-/i18n-check ja --coverage
-/i18n-check en --consistency
-/i18n-check --format
-/i18n-check --cultural
-/i18n-check --complete
+cd ~/projects/claude-code-workspace
+git pull
 ```
 
-**Features:**
-- Translation coverage analysis across all supported languages
-- Consistency checking for translation keys and formats
-- Format validation (placeholders, variables, HTML tags)
-- Cultural sensitivity and locale-specific content review
-- Complete internationalization audit across entire codebase
+Changes automatically reflect via symlinks.
 
-**Use Cases:**
-- Pre-release internationalization audit
-- Missing translation detection across languages
-- Translation quality consistency verification
-- Cultural appropriateness review for global products
+### Version Management
 
-### `/clean-jobs` - Safe Background Job Cleanup
+Commands follow semantic versioning in frontmatter:
 
-Safely cleans up only background jobs created in the current Claude Code session.
-
-**Usage:**
-```bash
-/clean-jobs
+```yaml
+---
+version: 1.1.0
+last-modified: 2025-11-13
+---
 ```
 
-**Features:**
-- Interactive cleanup options (all jobs, select individually, or cancel)
-- Safe cleanup limited to current session only
-- Input validation and race condition prevention
-- Detailed cleanup results reporting
-- Does not affect other Claude Code sessions
+## 📖 Resources
 
-**Use Cases:**
-- Cleanup after long development sessions
-- Manual stop of processes started by `/web-dev`, `/api-dev`, etc.
-- Periodic job cleanup for memory conservation
+### Documentation
 
-## 📝 Additional Information
+- Command docs: `commands/*.md`
+- Stack docs: `stacks/*.md`
+- Design guide: `stacks/slash-command-design.md`
 
-### About This Repository
+### Integrated Skills
 
-- **Purpose**: Personal backup and version control of custom Claude Code commands
-- **Compatibility**: Claude Code (CLI)
-- **Last Updated**: 2025-11-11
+- **Anthropic Skills**: PDF, XLSX, Artifacts, MCP builder
+- **Superpowers**: Community skill collection
 
-### Prerequisites
+Access via Skill tool in Claude Code.
 
-- Claude Code CLI must be installed and configured
-- Basic familiarity with command-line operations
-- Git installed (for symlink workflow and updates)
+### Learning & History
 
-### Customization
+- Session history: `projects/`
+- Learning sessions tracked for pattern recognition
 
-Feel free to modify commands to fit your workflow. All commands are in Markdown format and can be edited directly in the `commands/` directory.
+## 🔒 Security
 
-### Troubleshooting
+File permissions enforced by Claude Code:
+- Prohibited: `.env`, credentials, secrets
+- Git operations via standard commands only
+- No direct `.git/` manipulation
 
-**Symlink creation fails:**
-- Ensure `~/.claude/commands/` directory exists: `mkdir -p ~/.claude/commands/`
-- Check file permissions: `ls -la ~/.claude/commands/`
+All commands enforce OWASP Top 10, input validation, secure patterns.
 
-**Commands not appearing in Claude Code:**
-- Restart Claude Code CLI
-- Verify symlinks are created correctly: `ls -la ~/.claude/commands/`
-- Check that command files are valid Markdown with proper frontmatter
+## 🐛 Troubleshooting
+
+### Commands Not Appearing
+
+```bash
+ls -la ~/.claude/commands/
+chmod 644 ~/.claude/commands/*.md
+# Restart Claude Code CLI
+```
+
+### Symlinks Broken
+
+```bash
+mkdir -p ~/.claude/commands/ ~/.claude/stacks/
+ls -la ~/.claude/
+```
+
+### Configuration Issues
+
+1. Verify `CLAUDE.md` syntax
+2. Check `settings.json` JSON syntax
+3. Review Claude Code logs
 
 ## 📄 License
 
-MIT License - See LICENSE file for details.
+MIT License - Personal use
+
+---
+
+**Last Updated**: 2025-11-13
+**Status**: Active personal workspace
