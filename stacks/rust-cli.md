@@ -104,30 +104,30 @@ chmod +x .git/hooks/pre-commit
 ## [CRITICAL] Error Handling Rules
 
 ### Prohibited
-- ❌ `unwrap()` / `expect()` in production code (panic risk)
-- ❌ Panic in library code (no choice for caller)
-- ❌ Silencing errors (`let _ = result;`)
+- Bad: `unwrap()` / `expect()` in production code (panic risk)
+- Bad: Panic in library code (no choice for caller)
+- Bad: Silencing errors (`let _ = result;`)
 
 ### Recommended
-- ✅ `?` operator for error propagation
-- ✅ `Result<T, E>` return
-- ✅ Error types: `thiserror` (library), `anyhow` (application)
-- ✅ Detailed info via custom error types
+- Good: `?` operator for error propagation
+- Good: `Result<T, E>` return
+- Good: Error types: `thiserror` (library), `anyhow` (application)
+- Good: Detailed info via custom error types
 
 ### Exceptionally allowed
-- ✅ `unwrap()` in test code
-- ✅ `expect("reason")` for invariants (e.g., guaranteed initialized)
-- ✅ `.expect()` in `main()` (startup failure)
+- Good: `unwrap()` in test code
+- Good: `expect("reason")` for invariants (e.g., guaranteed initialized)
+- Good: `.expect()` in `main()` (startup failure)
 
 **Examples**:
 ```rust
-// ❌ Bad: panic risk
+// Bad: panic risk
 let config = std::fs::read_to_string("config.toml").unwrap();
 
-// ✅ Good: error propagation
+// Good: error propagation
 let config = std::fs::read_to_string("config.toml")?;
 
-// ✅ Good: clear reason
+// Good: clear reason
 let config = std::fs::read_to_string("config.toml")
     .expect("config.toml must exist in binary directory");
 ```
@@ -140,20 +140,32 @@ let config = std::fs::read_to_string("config.toml")
 
 **Prohibited pattern detection (Claude Code execution recommended)**:
 ```bash
-# Detect unwrap() (exclude test code)
-rg "\.unwrap\(\)" --type rust --glob '!**/tests/**' --glob '!**/*_test.rs'
+# Detect unwrap() (exclude test code, exclude safe variants)
+rg '\.unwrap\(\)' --type rust \
+   --glob '!**/tests/**' \
+   --glob '!**/*_test.rs' \
+   --glob '!**/benches/**' \
+   | rg -v 'unwrap_or|unwrap_or_default|unwrap_or_else'
 
 # Detect unsafe
 rg "unsafe\s+\{" --type rust
 
-# Detect eval-like patterns
-rg "std::process::Command::new.*format!" --type rust
+# Detect command injection patterns
+rg 'Command::new\(format!' --type rust  # format! in Command::new
+rg 'Command::new\([^"]*\$' --type rust   # Variable interpolation risk
 ```
 
 **Response when detected**:
 - `unwrap()` → Replace with `?` operator or `expect("reason")`
 - `unsafe` → Consider alternatives or add detailed SAFETY comment
-- Command injection risk → Use argument arrays, not string interpolation
+- Command injection risk → Use argument arrays, not string interpolation:
+  ```rust
+  // Bad: String interpolation
+  Command::new("sh").arg("-c").arg(format!("cat {}", user_input))
+
+  // Good: Argument array
+  Command::new("cat").arg(&user_input)
+  ```
 
 ### Dependency Security
 
@@ -178,6 +190,43 @@ cargo outdated           # Check outdated dependencies
 - **Ownership**: Compile-time memory safety guarantee
 - **Borrow checker**: Data race prevention
 - **unsafe minimization**: Minimal unsafe, thorough review
+
+### File System Security
+
+**Path Traversal Prevention**:
+```rust
+use std::path::PathBuf;
+use anyhow::{Result, bail};
+
+fn read_user_file(user_input: &str, safe_dir: &PathBuf) -> Result<String> {
+    // Bad: Direct use of user input
+    // std::fs::read_to_string(user_input)?;
+
+    // Good: Canonicalize and validate
+    let path = std::fs::canonicalize(user_input)?;
+
+    if !path.starts_with(safe_dir) {
+        bail!("Path traversal detected: access outside safe directory");
+    }
+
+    Ok(std::fs::read_to_string(&path)?)
+}
+```
+
+**Permission Checks**:
+- Validate file permissions before sensitive operations
+- Use `tempfile` crate for secure temporary files
+- Set appropriate `umask` for created files
+
+**Examples**:
+```rust
+// Temporary files (auto-cleanup on drop)
+use tempfile::NamedTempFile;
+
+let mut tmpfile = NamedTempFile::new()?;
+writeln!(tmpfile, "sensitive data")?;
+// tmpfile automatically deleted when dropped
+```
 
 ---
 
@@ -206,7 +255,7 @@ cargo outdated           # Check outdated dependencies
 
 ---
 
-## [REFERENCE] Testing & Quality Standards
+## [REFERENCE] Testing Standards
 
 - **Test coverage**: 60-80% target for new features (project dependent)
 - **Doc tests**: Required for public APIs (`cargo test --doc`)
@@ -274,22 +323,71 @@ fn main() -> Result<()> {
 ```rust
 use rayon::prelude::*;
 
-// ❌ Serial processing (slow)
+// Bad: Serial processing (slow)
 fn process_items(items: &[Item]) -> Vec<Result> {
     items.iter().map(|item| process(item)).collect()
 }
 // Processing time: 10s
 
-// ✅ Parallel processing (rayon)
+// Good: Parallel processing (rayon)
 fn process_items(items: &[Item]) -> Vec<Result> {
     items.par_iter().map(|item| process(item)).collect()
 }
 // Processing time: 2.5s (4x speedup on 4 cores)
 ```
 
+### Async Runtime Selection
+
+**tokio** (I/O bound tasks):
+- Network operations, file I/O, database access
+- Use `tokio::fs` for async file operations
+- `tokio::time::sleep` for delays
+
+**rayon** (CPU bound tasks):
+- Data processing, parallel computation
+- No I/O involved
+
+**Don't mix**: Avoid `rayon` inside `tokio` async functions (blocks executor)
+
+```rust
+// Bad: rayon blocks tokio executor
+async fn process_data() {
+    let results = items.par_iter()  // Blocks all tokio tasks
+        .map(|x| heavy_compute(x))
+        .collect();
+}
+
+// Good: Use spawn_blocking for CPU-bound work
+async fn process_data() {
+    let results = tokio::task::spawn_blocking(|| {
+        items.par_iter()  // Runs in separate thread pool
+            .map(|x| heavy_compute(x))
+            .collect()
+    }).await?;
+}
+```
+
 ---
 
 ## [REFERENCE] Recommended Crates
+
+### Security Evaluation
+
+**Before adding dependencies**:
+1. Check vulnerability database: https://rustsec.org/advisories/
+2. Verify maintenance status (last update < 6 months preferred)
+3. Review dependency tree: `cargo tree --package <crate-name>`
+4. Check download count and GitHub stars (popularity indicator)
+
+**Security audit workflow**:
+```bash
+# Weekly: Check for known vulnerabilities
+cargo audit
+
+# Before production: Full dependency analysis
+cargo deny check advisories
+cargo tree --duplicates  # Detect duplicate dependencies
+```
 
 ### By Category
 
@@ -325,13 +423,24 @@ fn process_items(items: &[Item]) -> Vec<Result> {
 
 ### Optimization Levels
 ```toml
-# Cargo.toml
+# Cargo.toml - Recommended for most projects
 [profile.release]
 opt-level = 3            # Maximum optimization
-lto = true               # Link Time Optimization
-codegen-units = 1        # Single code generation unit (optimization priority)
+lto = "thin"             # Thin LTO (balanced build time and binary size)
+codegen-units = 16       # Default (parallel compilation, faster builds)
 strip = true             # Strip debug symbols
+
+# Extreme optimization (slower builds, smaller binaries)
+# Use only when binary size is critical (embedded, constrained environments)
+[profile.release-optimized]
+inherits = "release"
+lto = true               # Full LTO
+codegen-units = 1        # Single unit (slowest builds, maximum optimization)
 ```
+
+**Build time comparison** (20,000 line project):
+- `release` profile: ~2 minutes
+- `release-optimized` profile: ~10 minutes (5x slower, ~5% smaller binary)
 
 ### Benchmarking
 ```rust
