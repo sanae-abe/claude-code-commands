@@ -95,6 +95,17 @@ Avoid:
 
 ## Security Guidelines
 
+### Security Risks in Slash Commands
+
+**HIGH**: Command injection via $ARGUMENTS
+- Mitigation: Sanitize paths (reject ../), escape before Bash execution
+
+**MEDIUM**: Path traversal, sensitive file exposure
+- Mitigation: Validate against project root, grant minimum necessary tools
+
+**LOW**: Information disclosure in error messages
+- Mitigation: Report error types only, never stack traces/absolute paths
+
 ### Input Validation
 
 Always validate $ARGUMENTS before use:
@@ -167,90 +178,32 @@ Parse from $ARGUMENTS:
 
 ## Tool Usage Patterns
 
-### TodoWrite
+**TodoWrite**: 3+ steps, long operations, progress tracking
+**AskUserQuestion**: Missing/ambiguous arguments, multiple approaches, user decisions
+**Task (subagents)**: Complex exploration (Explore), specialized analysis (code-reviewer, security-auditor, performance-engineer)
 
-Use when:
-- Command has 3+ distinct steps
-- Long-running operations
-- Complex workflows needing progress tracking
+**Workflow patterns:**
 
-```markdown
-TodoWrite: Create task list at start:
-1. Parse and validate arguments
-2. Analyze target
-3. Execute operation
-4. Verify results
+Git operations:
+1. Validate repo: `git rev-parse --git-dir`
+2. Check state: `git status --porcelain`
+3. Execute command
+4. Verify: `git log -1` or `git status`
+5. If not repo or uncommitted changes: use AskUserQuestion
 
-Update status as each step completes
-```
-
-### AskUserQuestion
-
-Use when:
-- Arguments missing or ambiguous
-- Multiple valid approaches exist
-- User decision required
-
-```markdown
-If $ARGUMENTS empty or unclear:
-1. Use AskUserQuestion with 2-4 clear options
-2. Parse user selection
-3. Proceed with chosen option
-```
-
-### Task Tool (Subagents)
-
-Use when:
-- Complex codebase exploration needed
-- Specialized analysis required (security, performance)
-- Large-scale search across multiple locations
-
-```markdown
-Use Task tool with subagent_type:
-- Explore: codebase navigation, pattern discovery
-- code-reviewer: code quality analysis
-- security-auditor: security review
-- performance-engineer: performance analysis
-
-Provide clear, specific task description
-Specify what information subagent should return
-```
-
-### Common Workflow Patterns
-
-**Git operations:**
-```markdown
-1. Validate git repository via Bash: git rev-parse --git-dir
-2. Check working tree state: git status --porcelain
-3. Execute git command
-4. Verify result: git log -1 or git status
-5. Report outcome
-
-Error handling:
-If not in git repo: report error and exit
-If uncommitted changes detected: use AskUserQuestion to confirm
-```
-
-**Code analysis:**
-```markdown
+Code analysis:
 1. Parse target from $ARGUMENTS
-2. Locate files: Grep for patterns or Glob for file types
-3. Read and analyze: use Read tool
+2. Locate files: Grep (patterns) or Glob (file types)
+3. Read and analyze
 4. Generate report
-5. Present findings
+5. If scope unclear: Task tool with Explore subagent
 
-When target scope unclear: use Task tool with Explore subagent
-When searching specific patterns: use Grep directly
-```
-
-**Interactive selection:**
-```markdown
-1. Check if $ARGUMENTS provided
-2. If missing: use AskUserQuestion
+Interactive selection:
+1. Check $ARGUMENTS
+2. If missing: AskUserQuestion with 2-4 options
 3. Validate selection
-4. Create TodoWrite for multi-step execution
+4. TodoWrite for multi-step execution
 5. Execute based on choice
-```
 
 ## Error Handling
 
@@ -273,21 +226,16 @@ Never expose absolute paths, stack traces, or internal details
 Report only user-actionable information
 ```
 
-## Examples Section
+## Examples
 
-Provide concrete input/output examples:
+Provide 2-3 concrete examples covering normal, interactive, and error cases:
 
 ```markdown
 ## Examples
 
-Input: /command target-name --flag
-Action: Execute with flag enabled on target-name
-
-Input: /command
-Action: Interactive mode, prompt for target selection
-
-Input: /command invalid-target
-Action: Report error with valid target format
+/command target-name --flag → Execute with flag on target-name
+/command → AskUserQuestion for target selection
+/command invalid → Report error: "Invalid target format. Use: <name> or <path>"
 ```
 
 ## Command Naming
@@ -324,45 +272,12 @@ First parse the arguments, then validate the input, and finally execute the oper
 
 ## Quality Checklist
 
-Before finalizing a slash command:
+Before finalizing:
 
-- [ ] YAML frontmatter complete and valid
-- [ ] allowed-tools includes only necessary tools
-- [ ] description clear and under 100 characters
-- [ ] $ARGUMENTS referenced if command accepts input
-- [ ] Argument validation specified
-- [ ] Execution flow is step-by-step
-- [ ] Error handling specified with security considerations
-- [ ] Examples provided
-- [ ] No emojis or excessive decoration
-- [ ] No table of contents
-- [ ] No version numbers or dates
-- [ ] No project-specific paths or names
-- [ ] No internal cross-references
-- [ ] Written in English
-- [ ] Direct, imperative instructions
+- YAML frontmatter valid with minimum necessary tools
+- $ARGUMENTS validation and error handling specified
+- Security considerations applied (input sanitization, path validation)
+- Examples provided with concrete input/output
+- Direct, imperative English instructions
+- No emojis, TOC, version numbers, or project-specific details
 
-## Testing
-
-After creating a command:
-
-1. Test with arguments: `/command arg1 --flag`
-2. Test without arguments: `/command`
-3. Test with invalid input: `/command invalid`
-4. Verify YAML parsing (command appears in list)
-5. Verify allowed-tools restrictions work
-6. Test error handling paths
-
-## Maintenance
-
-Slash commands require minimal maintenance:
-- Git tracks history (no version fields needed)
-- Update when Claude Code APIs change
-- Refactor when patterns improve
-- Remove obsolete commands entirely (don't deprecate)
-
-Avoid:
-- Version fields in documents
-- "Last updated" dates
-- "TODO" or roadmap sections
-- "Deprecated" sections

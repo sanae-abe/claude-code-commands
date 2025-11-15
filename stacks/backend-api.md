@@ -1,65 +1,45 @@
 # Backend API Development
 
-## 📋 クイックスタート
+## Quality Standards
 
-```bash
-# 開発開始（99%使用）
-npm start                # APIサーバー起動（Node.js）
-npm run dev              # 開発モード（ホットリロード）
-npm run type-check       # 型チェック（TypeScript）
+### API Design
+- RESTful principles: Resource-based URLs, appropriate HTTP methods
+- OpenAPI 3.0+ specification: Required, auto-generated with swagger-ui
+- Versioning: `/api/v1/` format, version bump on breaking changes
+- Unified error responses: RFC 7807 Problem Details format recommended
 
-# データベース操作（90%使用）
-npm run migrate          # マイグレーション実行
-npm run seed             # テストデータ投入
-npm run db:reset         # データベースリセット
+### Type Safety
+- TypeScript (Node.js): strict mode, zero type errors
+- Python: Type Hints + mypy, Pydantic usage
+- Go: Static typing, nil safety
+- Rust: Ownership system, careful unwrap() usage
 
-# テスト・品質確認（85%使用）
-npm run test             # 全テスト実行
-npm run test:unit        # 単体テスト
-npm run test:integration # 統合テスト
-npm run lint             # Linter実行
-```
+### Testing Strategy
+- Unit tests: Function/method level, 80%+ coverage
+- Integration tests: API endpoints, database integration
+- E2E tests: User scenario-based
+- Load tests: Production-level RPS (Requests Per Second) verification
 
-## 🎯 品質基準
+## Security
 
-### API設計
-- **RESTful原則遵守**: リソースベースURL、適切なHTTPメソッド
-- **OpenAPI 3.0+仕様書**: 必須、swagger-uiで自動生成
-- **バージョニング**: `/api/v1/`形式、破壊的変更時はバージョンアップ
-- **エラーレスポンス統一**: RFC 7807 Problem Details形式推奨
+### OWASP API Security Top 10 2023 Compliance
+1. **Broken Object Level Authorization (BOLA)**: Verify user authorization for accessed objects, prevent unauthorized access to other users' data
+2. **Broken Authentication**: JWT + Refresh Token with expiration, OAuth 2.0, multi-factor authentication
+3. **Broken Object Property Level Authorization**: Property-level access control, prevent mass assignment and excessive data exposure
+4. **Unrestricted Resource Consumption**: Rate limiting (IP/user-based), request size limits, timeout configuration, prevent DoS
+5. **Broken Function Level Authorization**: RBAC implementation, endpoint-level authorization checks
+6. **Unrestricted Access to Sensitive Business Flows**: Business logic rate limiting, CAPTCHA, anomaly detection for critical flows
+7. **Server-Side Request Forgery (SSRF)**: Validate and sanitize URLs, whitelist allowed domains, disable unnecessary protocols
+8. **Security Misconfiguration**: Secure defaults, environment variables for secrets, disable debug mode in production
+9. **Improper Inventory Management**: API versioning, deprecation policies, documentation of all endpoints and data flows
+10. **Unsafe Consumption of APIs**: Validate responses from external APIs, implement timeout and circuit breakers
 
-### 型安全性
-- **TypeScript（Node.js）**: strict mode、型エラー0件
-- **Python**: Type Hints + mypy、Pydantic使用
-- **Go**: 静的型付け、nil安全性確保
-- **Rust**: 所有権システム、unwrap()の慎重な使用
+### Authentication & Authorization
 
-### テスト戦略
-- **単体テスト**: 関数・メソッド単位、カバレッジ80%+
-- **統合テスト**: APIエンドポイント、データベース連携
-- **E2Eテスト**: ユーザーシナリオベース
-- **負荷テスト**: 本番想定のRPS（Requests Per Second）確認
-
-## 🔒 セキュリティ
-
-### OWASP API Top 10対応（必須）
-1. **認証の脆弱性**: JWT + Refresh Token、OAuth 2.0
-2. **認可の脆弱性**: RBAC（Role-Based Access Control）実装
-3. **データ露出**: レスポンスフィルタリング、機密情報マスク
-4. **Rate Limiting**: IP/ユーザーベース制限、429 Too Many Requests
-5. **BOLA（Broken Object Level Authorization）**: オブジェクト所有権確認
-6. **マスアサインメント**: ホワイトリスト方式の入力検証
-7. **SQLインジェクション**: ORM/パラメータ化クエリ必須
-8. **インジェクション**: 入力検証、出力エスケープ
-9. **構成ミス**: セキュアなデフォルト設定、秘密情報の環境変数化
-10. **不十分なログ記録**: 監査ログ、異常検知
-
-### 認証・認可
+#### JWT Authentication (with expiration)
 ```javascript
-// JWT認証の実装例（Node.js + Express）
 const jwt = require('jsonwebtoken');
 
-// 認証ミドルウェア
 function authenticateToken(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -71,7 +51,23 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// 認可チェック
+// Token generation (15 min expiration)
+const token = jwt.sign(
+  { userId: user.id, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: '15m' }
+);
+
+// Refresh Token (7 day expiration)
+const refreshToken = jwt.sign(
+  { userId: user.id },
+  process.env.REFRESH_TOKEN_SECRET,
+  { expiresIn: '7d' }
+);
+```
+
+#### Authorization Check
+```javascript
 function authorizeRole(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -81,7 +77,6 @@ function authorizeRole(...roles) {
   };
 }
 
-// 使用例
 app.get('/api/admin/users',
   authenticateToken,
   authorizeRole('admin'),
@@ -89,188 +84,595 @@ app.get('/api/admin/users',
 );
 ```
 
-### 入力検証
+#### Password Hashing
+```javascript
+// Node.js + bcrypt
+const bcrypt = require('bcrypt');
+
+// User registration
+async function createUser(username, password) {
+  const saltRounds = 12;
+  const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+  return User.create({
+    username,
+    password: hashedPassword
+  });
+}
+
+// Login verification
+async function verifyPassword(inputPassword, hashedPassword) {
+  return await bcrypt.compare(inputPassword, hashedPassword);
+}
+```
+
 ```python
-# Pydanticによる入力検証（Python + FastAPI）
+# Python + passlib
+from passlib.hash import bcrypt
+
+# User registration
+def create_user(username: str, password: str):
+    hashed = bcrypt.hash(password)
+    return User(username=username, password=hashed)
+
+# Login verification
+def verify_password(input_password: str, hashed: str) -> bool:
+    return bcrypt.verify(input_password, hashed)
+```
+
+### Security Headers
+```javascript
+// helmet.js (Node.js + Express)
+const helmet = require('helmet');
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+```
+
+### CORS Configuration
+```javascript
+// Node.js + Express
+const cors = require('cors');
+
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS.split(','),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+```
+
+```python
+# Python + FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS").split(","),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+```
+
+### Input Validation
+```python
+# Pydantic input validation (Python + FastAPI)
 from pydantic import BaseModel, EmailStr, constr, validator
 
 class UserCreate(BaseModel):
-    username: constr(min_length=3, max_length=20)  # 長さ制限
-    email: EmailStr  # メール形式検証
-    password: constr(min_length=8)  # パスワード最小長
+    username: constr(min_length=3, max_length=20)
+    email: EmailStr
+    password: constr(min_length=8)
 
     @validator('password')
     def validate_password(cls, v):
         if not any(c.isupper() for c in v):
-            raise ValueError('少なくとも1つの大文字が必要')
+            raise ValueError('At least one uppercase letter required')
         if not any(c.isdigit() for c in v):
-            raise ValueError('少なくとも1つの数字が必要')
+            raise ValueError('At least one digit required')
         return v
 
 @app.post("/users")
 async def create_user(user: UserCreate):
-    # 検証済みデータで安全に処理
     return {"username": user.username}
 ```
 
-## 📊 パフォーマンス
+### SSRF Prevention
+```javascript
+// API7: Server-Side Request Forgery prevention
+const url = require('url');
 
-### レスポンス時間目標
-- **P95**: < 200ms（95%のリクエストが200ms以内）
-- **P99**: < 500ms（99%のリクエストが500ms以内）
-- **最大**: < 2000ms（タイムアウト設定）
+// Whitelist of allowed domains
+const ALLOWED_DOMAINS = ['api.trusted-service.com', 'data.partner.com'];
 
-### スループット
-- **最小RPS**: 1000リクエスト/秒（単一インスタンス）
-- **スケーリング**: 水平スケール対応、ステートレス設計
+async function fetchExternalResource(userProvidedUrl) {
+  const parsed = url.parse(userProvidedUrl);
 
-### データベース最適化
-- **N+1問題解決**: JOIN、Eager Loading使用
-  ```javascript
-  // ❌ N+1問題
-  const users = await User.findAll();
-  for (const user of users) {
-    user.posts = await Post.findAll({ where: { userId: user.id } });
+  // Validate protocol (only allow HTTPS)
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Only HTTPS protocol is allowed');
   }
 
-  // ✅ 解決（Eager Loading）
-  const users = await User.findAll({
-    include: [{ model: Post }]
-  });
-  ```
-- **インデックス適切配置**: WHERE、JOIN条件のカラムにインデックス
-- **クエリ分析**: EXPLAIN実行、スロークエリログ監視
+  // Validate domain against whitelist
+  if (!ALLOWED_DOMAINS.includes(parsed.hostname)) {
+    throw new Error('Domain not allowed');
+  }
 
-### キャッシュ戦略
-- **Redis**: セッション、頻出クエリ結果
-- **CDN**: 静的アセット、API GETレスポンス（適切なCache-Controlヘッダー）
-- **メモリキャッシュ**: インプロセスキャッシュ（短時間TTL）
+  // Prevent access to private IP ranges
+  const ip = await dns.resolve(parsed.hostname);
+  if (isPrivateIP(ip)) {
+    throw new Error('Access to private IP ranges is forbidden');
+  }
 
-## 💡 実践例
+  return fetch(userProvidedUrl, { timeout: 5000 });
+}
 
-### ケース1: N+1問題の解決
+function isPrivateIP(ip) {
+  return /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/.test(ip);
+}
+```
+
+### Business Flow Protection
 ```javascript
-// 状況: ユーザー一覧取得が遅い（5秒）
+// API6: Unrestricted Access to Sensitive Business Flows
+const { RateLimiterMemory } = require('rate-limiter-flexible');
 
-// ❌ N+1問題のコード
+// Business logic rate limiting for sensitive operations
+const purchaseLimiter = new RateLimiterMemory({
+  points: 5, // 5 purchases
+  duration: 3600, // per hour per user
+});
+
+const accountCreationLimiter = new RateLimiterMemory({
+  points: 3, // 3 accounts
+  duration: 86400, // per day per IP
+});
+
+app.post('/api/purchase', authenticateToken, async (req, res) => {
+  try {
+    // Check purchase rate limit
+    await purchaseLimiter.consume(req.user.id);
+
+    // Anomaly detection: check for unusual patterns
+    const recentPurchases = await getUserRecentPurchases(req.user.id, 10);
+    if (detectAnomalousPattern(recentPurchases, req.body)) {
+      return res.status(429).json({
+        error: 'Unusual activity detected. Please verify your identity.'
+      });
+    }
+
+    // Process purchase
+    const result = await processPurchase(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(429).json({ error: 'Too many purchase attempts' });
+  }
+});
+
+function detectAnomalousPattern(recentPurchases, currentPurchase) {
+  // Example: detect if purchase amount is significantly higher than average
+  const avgAmount = recentPurchases.reduce((sum, p) => sum + p.amount, 0) / recentPurchases.length;
+  return currentPurchase.amount > avgAmount * 10;
+}
+```
+
+### External API Consumption Safety
+```javascript
+// API10: Unsafe Consumption of APIs
+const axios = require('axios');
+const Joi = require('joi');
+
+// Define expected response schema
+const userResponseSchema = Joi.object({
+  id: Joi.number().required(),
+  email: Joi.string().email().required(),
+  name: Joi.string().max(100).required(),
+  role: Joi.string().valid('user', 'admin').required()
+});
+
+async function fetchExternalUserData(userId) {
+  try {
+    const response = await axios.get(`https://external-api.com/users/${userId}`, {
+      timeout: 5000, // 5 second timeout
+      maxRedirects: 0, // Prevent redirect attacks
+      validateStatus: (status) => status === 200 // Only accept 200
+    });
+
+    // Validate response structure
+    const { error, value } = userResponseSchema.validate(response.data, {
+      stripUnknown: true // Remove unexpected fields
+    });
+
+    if (error) {
+      throw new Error(`Invalid response format: ${error.message}`);
+    }
+
+    return value;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('External API timeout');
+    }
+    throw error;
+  }
+}
+
+// Circuit breaker pattern for failing external APIs
+class CircuitBreaker {
+  constructor(threshold = 5, timeout = 60000) {
+    this.failureCount = 0;
+    this.threshold = threshold;
+    this.timeout = timeout;
+    this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+    this.nextAttempt = Date.now();
+  }
+
+  async execute(fn) {
+    if (this.state === 'OPEN') {
+      if (Date.now() < this.nextAttempt) {
+        throw new Error('Circuit breaker is OPEN');
+      }
+      this.state = 'HALF_OPEN';
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  onSuccess() {
+    this.failureCount = 0;
+    this.state = 'CLOSED';
+  }
+
+  onFailure() {
+    this.failureCount++;
+    if (this.failureCount >= this.threshold) {
+      this.state = 'OPEN';
+      this.nextAttempt = Date.now() + this.timeout;
+    }
+  }
+}
+
+const externalApiBreaker = new CircuitBreaker();
+
+app.get('/api/external-user/:id', async (req, res) => {
+  try {
+    const userData = await externalApiBreaker.execute(() =>
+      fetchExternalUserData(req.params.id)
+    );
+    res.json(userData);
+  } catch (error) {
+    res.status(503).json({ error: 'External service unavailable' });
+  }
+});
+```
+
+## Performance
+
+### Response Time Targets
+- P95: < 200ms (95% of requests within 200ms)
+- P99: < 500ms (99% of requests within 500ms)
+- Maximum: < 2000ms (timeout setting)
+
+### Throughput
+- Small scale (<10K users): 100-500 RPS
+- Medium scale (10K-100K users): 500-2000 RPS
+- Large scale (100K+ users): 2000+ RPS
+- Scaling: Horizontal scaling support, stateless design
+
+### Database Optimization
+
+#### N+1 Problem Resolution
+```javascript
+// Bad: N+1 problem
+const users = await User.findAll();
+for (const user of users) {
+  user.posts = await Post.findAll({ where: { userId: user.id } });
+}
+// Query count: 1 + N (101 queries for 100 users)
+
+// Good: Eager Loading
+const users = await User.findAll({
+  include: [{
+    model: Post,
+    attributes: ['id', 'title', 'createdAt']
+  }]
+});
+// Query count: 1 (using JOIN)
+```
+
+#### Connection Pooling
+```javascript
+// Node.js + PostgreSQL
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+```
+
+#### Bulk Operations
+```javascript
+// Bad: N INSERTs
+for (const item of items) {
+  await db.insert(item);
+}
+
+// Good: Single bulk INSERT
+await User.bulkCreate(items);
+```
+
+#### Index Placement Criteria
+- WHERE clause usage: Required
+- JOIN conditions: Required
+- ORDER BY: Recommended if query frequency > 10/sec
+- Cardinality < 10%: Not required
+
+### Caching Strategy
+- Redis: Sessions, frequent query results
+- CDN: Static assets, API GET responses (with proper Cache-Control headers)
+- In-memory cache: In-process caching (short TTL)
+
+## Implementation Guide
+
+### API Documentation Generation
+```javascript
+// Swagger UI auto-generation (Node.js + Express)
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
+
+const options = {
+  definition: {
+    openapi: '3.1.0',
+    info: {
+      title: 'API Documentation',
+      version: '1.0.0',
+    },
+    servers: [{ url: '/api/v1' }],
+  },
+  apis: ['./routes/*.js'],
+};
+
+const specs = swaggerJsdoc(options);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+```
+
+```python
+# FastAPI (auto-generated)
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="API Documentation",
+    version="1.0.0",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api-docs"
+)
+
+# Swagger UI auto-generated at /api-docs
+```
+
+### Error Handling
+```javascript
+// RFC 7807 Problem Details implementation
+class ApiError extends Error {
+  constructor(status, title, detail) {
+    super(detail);
+    this.status = status;
+    this.title = title;
+  }
+}
+
+// Error handler middleware
+app.use((err, req, res, next) => {
+  res.status(err.status || 500).json({
+    type: `https://api.example.com/errors/${err.status}`,
+    title: err.title || 'Internal Server Error',
+    status: err.status || 500,
+    detail: err.message,
+    instance: req.path
+  });
+});
+
+// Usage example
+throw new ApiError(404, 'Not Found', 'User not found');
+```
+
+### Database Migrations
+```javascript
+// Prisma Migrate
+// schema.prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+// Run migrations
+// Development: npx prisma migrate dev --name add_user_table
+// Production: npx prisma migrate deploy
+```
+
+```python
+# Alembic (SQLAlchemy)
+# Create migration
+# alembic revision --autogenerate -m "add user table"
+
+# Run migration
+# alembic upgrade head
+```
+
+### Structured Logging
+```javascript
+// Winston (Node.js)
+const winston = require('winston');
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  defaultMeta: { service: 'api' },
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
+logger.info('User created', { userId: 123, email: 'user@example.com' });
+```
+
+### Health Checks
+```javascript
+// /health, /ready endpoints
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/ready', async (req, res) => {
+  const dbOk = await checkDatabase();
+  const redisOk = await checkRedis();
+
+  if (dbOk && redisOk) {
+    res.json({ status: 'ready' });
+  } else {
+    res.status(503).json({ status: 'not ready' });
+  }
+});
+```
+
+## Practical Examples
+
+### Case 1: N+1 Problem Resolution
+```javascript
+// Situation: User list retrieval is slow (5 seconds)
+
+// Bad: N+1 problem
 async function getUsers() {
-  const users = await User.findAll();  // 1回のクエリ
+  const users = await User.findAll();
 
   for (const user of users) {
-    // N回のクエリ（ユーザー数分）
     user.posts = await Post.findAll({ where: { userId: user.id } });
   }
   return users;
 }
-// クエリ数: 1 + N（100ユーザーなら101回）
+// Query count: 1 + N (101 queries for 100 users)
 
-// ✅ 解決（Eager Loading）
+// Good: Eager Loading
 async function getUsers() {
   return await User.findAll({
     include: [{
       model: Post,
-      attributes: ['id', 'title', 'createdAt']  // 必要なカラムのみ
+      attributes: ['id', 'title', 'createdAt']
     }]
   });
 }
-// クエリ数: 1回（JOIN使用）
-// 結果: 5秒 → 0.2秒（25倍高速化）
+// Query count: 1 (using JOIN)
+// Result: 5s → 0.2s (25x faster)
 ```
 
-### ケース2: Rate Limiting実装
+### Case 2: Rate Limiting Implementation
 ```javascript
-// 状況: API乱用による過負荷
+// Situation: API abuse causing overload
 
-// express-rate-limitを使用
 const rateLimit = require('express-rate-limit');
 
-// IP単位のRate Limiting
+// IP-based rate limiting
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15分
-  max: 100,  // 最大100リクエスト
-  message: 'このIPからのリクエストが多すぎます。15分後に再試行してください。',
-  standardHeaders: true,  // RateLimit-* ヘッダー
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests from this IP, please try again after 15 minutes.',
+  standardHeaders: true,
   legacyHeaders: false
 });
 
-// 認証エンドポイントの厳しい制限
+// Strict limits for auth endpoints
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1分
-  max: 5,  // 最大5回
-  skipSuccessfulRequests: true  // 成功リクエストはカウントしない
+  windowMs: 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: true
 });
 
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
-
-// 結果: 乱用攻撃を防御、サーバー安定稼働
 ```
 
-### ケース3: SQLインジェクション対策
-```python
-# 状況: ユーザー入力をそのままSQLに使用
+#### Distributed Environment (Redis)
+```javascript
+const RedisStore = require('rate-limit-redis');
+const redis = require('redis');
 
-# ❌ 危険な実装（SQLインジェクション脆弱性）
+const client = redis.createClient();
+
+const limiter = rateLimit({
+  store: new RedisStore({
+    client: client,
+    prefix: 'rl:'
+  }),
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+```
+
+### Case 3: SQL Injection Prevention
+```python
+# Situation: User input used directly in SQL
+
+# Bad: SQL injection vulnerability
 def get_user(username):
     query = f"SELECT * FROM users WHERE username = '{username}'"
     return db.execute(query)
-# 攻撃: username = "admin' OR '1'='1"
-# 実行SQL: SELECT * FROM users WHERE username = 'admin' OR '1'='1'
-# → 全ユーザー情報が漏洩
+# Attack: username = "admin' OR '1'='1"
+# Executed SQL: SELECT * FROM users WHERE username = 'admin' OR '1'='1'
+# Result: All user data leaked
 
-# ✅ 安全な実装1: ORM使用
+# Good: ORM usage
 def get_user(username):
     return User.query.filter_by(username=username).first()
 
-# ✅ 安全な実装2: パラメータ化クエリ
+# Good: Parameterized query
 def get_user(username):
     query = "SELECT * FROM users WHERE username = ?"
     return db.execute(query, (username,))
-
-# 結果: SQLインジェクション完全防御
 ```
 
-### よくあるパターン
+## Technology Stack Selection Guide
 
-#### API設計
-- **RESTful**: リソースベースURL、適切なHTTPメソッド（GET/POST/PUT/DELETE）
-- **GraphQL**: 柔軟なクエリ、過剰取得/過少取得の回避
-- **エラーハンドリング**: 統一形式、適切なHTTPステータスコード
+| Technology | Use Cases | Key Features | Considerations |
+|------------|-----------|--------------|----------------|
+| Node.js | High concurrency, real-time, JavaScript ecosystem | Event loop, async I/O, rich npm ecosystem | Not suitable for CPU-intensive tasks |
+| Python | Data processing, ML integration, rapid development | Rich libraries, high readability | GIL (multithreading limitations) |
+| Go | High performance, concurrency, cloud-native | Lightweight, fast compilation, goroutines | Verbose error handling |
+| Rust | Maximum performance, memory safety, systems programming | Ownership system, zero-cost abstractions | Steep learning curve |
 
-#### セキュリティ
-- **認証**: JWT + Refresh Token、OAuth 2.0
-- **認可**: RBAC、オブジェクトレベル権限チェック
-- **入力検証**: ホワイトリスト方式、型安全なスキーマ
+### Framework Selection
 
-#### パフォーマンス
-- **データベース**: N+1解決、適切なインデックス、クエリ最適化
-- **キャッシュ**: Redis、CDN、メモリキャッシュ
-- **非同期処理**: メッセージキュー（RabbitMQ、Kafka）
-
-## 🔧 技術スタック選択ガイド
-
-### Node.js
-- **適用**: 高並行性、リアルタイム、JavaScriptエコシステム活用
-- **特徴**: イベントループ、非同期I/O、npm豊富
-- **注意点**: CPU集約処理は不向き
-
-### Python
-- **適用**: データ処理、機械学習連携、開発速度重視
-- **特徴**: 豊富なライブラリ、可読性高い
-- **注意点**: GIL（Global Interpreter Lock）によるマルチスレッド制限
-
-### Go
-- **適用**: 高性能、並行処理、クラウドネイティブ
-- **特徴**: 軽量、コンパイル高速、goroutine
-- **注意点**: エラーハンドリングが冗長
-
-### Rust
-- **適用**: 最高性能、メモリ安全性、システムプログラミング
-- **特徴**: 所有権システム、ゼロコスト抽象化
-- **注意点**: 学習曲線急
-
-## 📚 参考リソース
-
-- **OWASP API Security**: https://owasp.org/www-project-api-security/
-- **OpenAPI Specification**: https://swagger.io/specification/
-- **JWT Best Practices**: https://tools.ietf.org/html/rfc8725
+| Language | Framework | Features |
+|----------|-----------|----------|
+| Node.js | Express | Lightweight, flexible, rich ecosystem |
+| Node.js | NestJS | TypeScript, DI, enterprise-ready |
+| Python | FastAPI | High performance, type-safe, auto API docs |
+| Python | Django | Full-stack, ORM, admin UI |
+| Go | Gin | High performance, simple |
+| Go | Echo | Lightweight, rich middleware |
+| Rust | Actix-web | Maximum performance |
+| Rust | Rocket | Type-safe, user-friendly |

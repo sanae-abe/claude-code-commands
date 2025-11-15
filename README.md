@@ -15,10 +15,13 @@ This repository is my personal backup and configuration management for Claude Co
 
 ```
 claude-code-workspace/
-├── commands/              # Custom slash commands (8 commands)
+├── commands/              # Custom slash commands (11 commands)
+│   ├── branch.md         # Git branch creation with conventions
 │   ├── clean-jobs.md     # Safe background job cleanup
+│   ├── commit.md         # Conventional Commits with emoji
 │   ├── decide.md         # Framework-driven decision support
 │   ├── i18n-check.md     # Internationalization status check
+│   ├── implement.md      # Document-driven task implementation
 │   ├── iterative-review.md  # Multi-perspective code review
 │   ├── plan-review.md    # Implementation planning with review
 │   ├── ship.md           # GitHub PR/GitLab MR creation
@@ -85,6 +88,11 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Usage: `/todo add "task"`, `/todo list`, `/todo complete 1`, `/todo sync`
 - Git integration, interactive UI, project-wide analysis
 
+**`/implement`** - Document-driven task implementation from tasks.yml
+- Usage: `/implement [task-id]`, `/implement` (list pending)
+- Automatic document context injection, acceptance criteria validation
+- Updates task status on completion, dependency checking
+
 **`/decide`** - Framework-driven decision support for tech choices
 - Usage: `/decide "question-or-options"`, `/decide "A vs B"`, `/decide "priorities"`
 - ICE/RICE scoring, Eisenhower Matrix, First Principles analysis
@@ -110,6 +118,16 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Translation coverage, consistency, format validation
 
 ### Version Control
+
+**`/branch`** - Create Git branch following Conventional Branch naming
+- Usage: `/branch [type] [description]`, `/branch` (interactive)
+- Branch types: feature, fix, refactor, docs, chore, hotfix
+- Auto-push with upstream tracking, uncommitted changes handling
+
+**`/commit`** - Create Conventional Commits with emoji formatting
+- Usage: `/commit [message]`, `/commit` (interactive)
+- Interactive type/scope selection, auto-emoji annotation
+- Validates format, suggests scope from changed files
 
 **`/ship`** - Create GitHub PR/GitLab MR with automatic platform detection
 - Usage: `/ship [branch-name] [title]`, `/ship` (interactive)
