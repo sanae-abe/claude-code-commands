@@ -15,11 +15,13 @@ This repository is my personal backup and configuration management for Claude Co
 
 ```
 claude-code-workspace/
-├── commands/              # Custom slash commands (6 commands)
+├── commands/              # Custom slash commands (8 commands)
 │   ├── clean-jobs.md     # Safe background job cleanup
+│   ├── decide.md         # Framework-driven decision support
 │   ├── i18n-check.md     # Internationalization status check
 │   ├── iterative-review.md  # Multi-perspective code review
 │   ├── plan-review.md    # Implementation planning with review
+│   ├── ship.md           # GitHub PR/GitLab MR creation
 │   ├── task-validate.md  # Quality validation and next actions
 │   └── todo.md           # Intelligent task management
 ├── stacks/                # Technology stack configurations (6 stacks)
@@ -83,6 +85,11 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Usage: `/todo add "task"`, `/todo list`, `/todo complete 1`, `/todo sync`
 - Git integration, interactive UI, project-wide analysis
 
+**`/decide`** - Framework-driven decision support for tech choices
+- Usage: `/decide "question-or-options"`, `/decide "A vs B"`, `/decide "priorities"`
+- ICE/RICE scoring, Eisenhower Matrix, First Principles analysis
+- Conclusion-first format with detailed comparison tables
+
 **`/plan-review`** - Create implementation plan and review
 - Usage: `/plan-review "feature name" [--rounds=3] [--perspectives=security,performance]`
 - Task breakdown, automatic review, todo.md updates
@@ -101,6 +108,13 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 **`/i18n-check`** - Internationalization status check
 - Usage: `/i18n-check [language] [--coverage|--consistency|--format|--cultural|--complete]`
 - Translation coverage, consistency, format validation
+
+### Version Control
+
+**`/ship`** - Create GitHub PR/GitLab MR with automatic platform detection
+- Usage: `/ship [branch-name] [title]`, `/ship` (interactive)
+- Auto-detects GitHub/GitLab, applies templates, runs quality checks
+- Conventional Commits format, draft PR/MR creation
 
 ### Utilities
 
@@ -178,6 +192,7 @@ last-modified: 2025-11-13
 - Command docs: `commands/*.md`
 - Stack docs: `stacks/*.md`
 - Design guide: `stacks/slash-command-design.md`
+- Decision frameworks: `docs/decision-frameworks.md` - ICE/RICE scoring, First Principles, practical workflows
 
 ### Integrated Skills
 
