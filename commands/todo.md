@@ -103,10 +103,13 @@ complete N | done N:
 - Update todos.md
 
 list [options]:
-- Display all tasks or filtered subset
-- Apply --filter (priority:X, context:Y)
-- Apply --sort (due, priority)
-- Show task numbers for reference
+- Read todos.md file
+- Display all tasks with numbers
+- Apply --filter (priority:X, context:Y) if specified
+- Apply --sort (due, priority) if specified
+- Use Read tool to load todos.md
+- Use Bash for grep filtering if needed
+- Format output with task numbers for reference
 
 uncomplete N:
 - Parse task number N

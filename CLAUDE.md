@@ -43,14 +43,33 @@
 - 並列実行可能なagentは同時起動
 
 **Subagent起動の品質確保**:
-- Agent起動時、Task tool の prompt に以下を必ず含める：
-  - `作業ディレクトリ: [絶対パス]`（例：`~/projects/foo`）
-  - `期待する成果: [具体的内容]`（例：`src/auth.ts に変更が加わること`）
-  - `失敗時の報告: "ERROR: [理由]" で始めること`
-- Agent完了時の確認：
-  - Agent出力に `ERROR:` が含まれる → 即座に作業停止、ユーザーに状況報告、次アクション再検討
-  - 重要操作（ファイル削除、DB変更等）の場合のみ → 報告されたファイル/ディレクトリの実在を確認
-  - 確認例: `ls -la [報告されたパス] 2>/dev/null || echo "VERIFICATION_FAILED"`
+
+**起動時prompt必須要素**:
+- 作業ディレクトリ: `[絶対パス]`
+- 期待する成果:
+  - `subagent_type=Explore`: ファイルパス・行番号を含む検索結果
+  - その他: 変更対象ファイルの明示
+- 失敗報告: `ERROR: [理由]` で開始
+
+**完了時検証フロー**:
+```
+IF agent出力に "ERROR:" 含む:
+    作業停止 → ユーザー報告 → 再実行判断
+
+ELIF subagent_type == "Explore":
+    IF 出力に正規表現 `[^:]+:\d+` マッチあり:
+        成功 → 次タスク続行
+    ELSE:
+        Grep/Glob直接実行に切替
+
+ELSE:
+    IF 期待ファイルが実在:
+        成功 → 次タスク続行
+    ELSE:
+        検証失敗 → ユーザー報告
+```
+
+**検証コマンド**: `ls -la [パス] 2>/dev/null || echo "FAIL"`
 
 **実装進捗の可視化**:
 - 3ステップ以上のタスクは必ずTodoWrite使用
@@ -514,6 +533,10 @@ team_size: 3-5           # チーム規模
 - ユーティリティ: `~/.claude/utils/*.py`
 - エージェント: `~/.claude/agents/*.agent.md`
 - エラー調査: `~/.claude/learnings/*.md`
+
+**意思決定・アイデア創出**:
+- 意思決定フレームワーク: `~/.claude/docs/decision-frameworks.md`
+- ICE/RICE スコアリング基準、First Principles等の実践的手法
 
 **機能別参照**:
 - AutoFlow統合: `~/.claude/docs/autoflow-integration-guide.md`
