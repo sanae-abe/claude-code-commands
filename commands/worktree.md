@@ -211,14 +211,6 @@ Suggestions:
 3. Delete existing: /worktree delete feature-auth
 ```
 
-## Best Practices
-
-- **Main worktree**: Keep for stable/release code
-- **Feature worktrees**: Create for features, bugfixes, experiments
-- **Merge frequently**: Avoid long-running divergent branches
-- **Clean up promptly**: Remove completed worktrees to reduce clutter
-
-For parallel development workflow integration, see CLAUDE.md.
 
 ## Output Format Examples
 

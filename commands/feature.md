@@ -31,7 +31,8 @@ validate_feature_name() {
   fi
 
   # Dangerous character check
-  if [[ "$input" =~ [\;\|\&\$\`\\\"\'../~] ]]; then
+  local dangerous_pattern='[;|&$`\\"'"'"'../~]'
+  if [[ "$input" =~ $dangerous_pattern ]]; then
     echo "ERROR [feature.md:validate]: Special characters detected"
     echo "  Input: $input"
     echo "  Forbidden: ; | & $ \` \\ \" ' ../ ./ / ~"
@@ -120,14 +121,6 @@ Architectural scope (7+ steps):
 6. Implement phase 3 (complete migration)
 7. Comprehensive testing and validation
 
-## Integration with Other Commands
-
-After TodoWrite creation, follow standard implementation flow:
-- Implementation: Direct coding or /implement [task-id] for complex features
-- Quality checks: /validate --layers=syntax,security (mandatory after implementation)
-- Git workflow: /branch → /commit → /ship
-
-See CLAUDE.md "基本開発フロー > 実装完了後の必須フロー" for details.
 
 ## Error Handling
 
@@ -172,12 +165,5 @@ Report only user-actionable information
 /feature "test; rm -rf /"
 ```
 
-## Notes
-
-This command focuses on interactive requirement clarification and implementation guidance. For detailed quality checks, use /validate. For structured implementation with documentation, use /implement with tasks.yml.
-
-Refer to CLAUDE.md basic development flow for comprehensive development practices including:
-- Requirement analysis and planning
-- Staged implementation approach
 - Quality standards (TypeScript strict mode, testing, security)
 - Error handling and debugging strategies

@@ -920,34 +920,8 @@ Recommendation: Update tasks.yml to remove invalid reference
 - Implementation agents: fullstack-developer, backend-developer, frontend-developer
 - Review agents: code-reviewer (post-implementation quality check)
 
-## Integration with Other Commands
-
-**After implementation, validate**:
-```
-/implement task-1
-/task-validate --layers=all
 ```
 
-**Create commit**:
-```
-/implement task-1
-/commit "Implement user authentication (task-1)"
-```
-
-**Create PR**:
-```
-/implement task-1
-/pr
-```
-
-## Notes
-
-- Document references are automatically loaded from tasks.yml
-- No need to manually specify context files
-- All referenced sections injected into implementation context
-- Task status automatically updated on completion
-- Dependencies checked before starting
-- Acceptance criteria guide implementation
 
 ## Exit Code System
 

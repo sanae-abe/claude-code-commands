@@ -162,7 +162,8 @@ validate_title_format() {
   fi
 
   # Detect command injection attempts (comprehensive)
-  if [[ "$title" =~ [\`\$\(\)\{\}\;\|\>\<\&] ]]; then
+  local dangerous_pattern='[`$(){};|><&]'
+  if [[ "$title" =~ $dangerous_pattern ]]; then
     echo "ERROR: Dangerous characters detected in title"
     echo "File: ship.md:143 - validate_title_format()"
     echo ""
@@ -240,7 +241,8 @@ detect_template_secrets() {
 ARGUMENTS_SAFE=$(echo "$ARGUMENTS" | tr -d '\n\r\t' | xargs)
 
 # Global validation BEFORE parsing
-if [[ "$ARGUMENTS_SAFE" =~ [\`\$\{\}\(\)] ]]; then
+dangerous_args_pattern='[`${}()]'
+if [[ "$ARGUMENTS_SAFE" =~ $dangerous_args_pattern ]]; then
   echo "ERROR: Dangerous characters in arguments"
   echo "File: ship.md:207 - Argument Processing"
   echo ""

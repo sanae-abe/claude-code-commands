@@ -304,20 +304,6 @@ echo "Report format: $REPORT_FORMAT"
 /review-quality .claude/CLAUDE.md
 ```
 
-## Integration with Workflows
-
-**Before committing changes**:
-```bash
-/review-quality ~/.claude/commands/my-command.md
-# Review scores and apply recommendations
-```
-
-**During iterative-review**:
-```bash
-/iterative-review proposal.md
-# Then validate quality:
-/review-quality proposal.md
-```
 
 ## Exit Code System
 

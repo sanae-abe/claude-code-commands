@@ -33,7 +33,8 @@ validate_update_type() {
   fi
 
   # Reject command injection characters
-  if [[ "$type" =~ [;\`\$\(\)\&\|\*\?\[\]\{\}\<\>\!] ]]; then
+  local injection_pattern='[;`$()&|*?[]{}<>!]'
+  if [[ "$type" =~ $injection_pattern ]]; then
     echo "ERROR: Invalid characters in update type"
     exit 2
   fi

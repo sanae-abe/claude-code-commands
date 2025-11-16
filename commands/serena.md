@@ -41,7 +41,8 @@ validate_arguments() {
   fi
 
   # Dangerous character check
-  if [[ "$args" =~ [\;\`\$\(\)\&\|] ]]; then
+  local dangerous_pattern='[;`$()&|]'
+  if [[ "$args" =~ $dangerous_pattern ]]; then
     echo "ERROR [serena.md:32]: Dangerous shell characters detected"
     echo "  Input: $args"
     echo "  Forbidden: ; \` \$() & |"

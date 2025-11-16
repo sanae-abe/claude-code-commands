@@ -230,8 +230,6 @@ Structure:
 
 Reason: ICE Score [value] ([priority level]). [1-2 sentence rationale]
 
----
-
 ## Detailed Analysis
 
 ### ICE Score Evaluation
@@ -292,8 +290,6 @@ Structure:
 
 Recommended action: Implement top 2 in current sprint
 
----
-
 ## Detailed Analysis
 
 ### ICE Score Evaluation (All Candidates)
@@ -322,8 +318,6 @@ Structure:
 3. [Task C] (ICE [score]) - Rejected (YAGNI)
 
 Reason: [Eisenhower Matrix + ICE Score + First Principles integration]
-
----
 
 ## Detailed Analysis
 
@@ -421,8 +415,6 @@ Mandatory structure:
 ## Conclusion: [Clear recommendation]
 
 Reason: [Score + key rationale in 1-2 sentences]
-
----
 
 ## Detailed Analysis
 [Framework-specific analysis]
@@ -606,8 +598,6 @@ Key principles:
 ## Conclusion: Zod is recommended
 
 Reason: ICE Score 18.2 (Highest priority). Superior type safety, better DX, seamless TypeScript integration.
-
----
 
 ## Detailed Analysis
 

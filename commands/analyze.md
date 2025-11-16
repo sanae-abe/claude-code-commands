@@ -33,7 +33,8 @@ validate_subcommand() {
   fi
 
   # Reject command injection characters
-  if [[ "$cmd" =~ [;\`\$\(\)\&\|\*\?\[\]\{\}\<\>\!] ]]; then
+  local injection_pattern='[;`$()&|*?[]{}<>!]'
+  if [[ "$cmd" =~ $injection_pattern ]]; then
     echo "ERROR: Invalid characters in subcommand"
     exit 2
   fi

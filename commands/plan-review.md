@@ -330,16 +330,3 @@ Suggestions:
 3. Check task name for control characters
 ```
 
-## Integration with /implement and /todo
-
-After /plan-review completion:
-
-**View tasks**: `/todo sync` to import tasks.yml tasks to todos.md
-**Start implementation**: `/todo next` → confirms → `/implement task-1`
-**Direct implementation**: `/implement task-1` directly
-
-Workflow:
-1. `/plan-review "Feature name"` → generates tasks in tasks.yml
-2. `/todo sync` → imports to todos.md for visibility
-3. `/todo next` → picks next task and asks to run /implement
-4. `/implement task-N` → executes with full context from tasks.yml

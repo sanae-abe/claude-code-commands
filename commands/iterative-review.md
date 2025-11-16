@@ -9,42 +9,6 @@ model: sonnet
 
 Review Target: $ARGUMENTS
 
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Quick Start](#quick-start)
-3. [Variable Reference](#variable-reference)
-4. [Allowed Perspectives](#allowed-perspectives)
-5. [Argument Validation and Parsing](#argument-validation-and-parsing) ⭐ UPDATED
-6. [Configuration Constants](#configuration-constants) ⭐ NEW
-7. [Validation Implementation](#validation-implementation) ⭐ UPDATED
-8. [Error Handling](#error-handling)
-9. [Execution Flow](#execution-flow)
-10. [Large File Handling Strategy](#large-file-handling-strategy) ⭐ NEW
-11. [Review Perspective Definitions](#review-perspective-definitions)
-12. [Review Mode Selection](#review-mode-selection)
-13. [Perspective Customization](#perspective-customization)
-14. [Target-Specific Reviews](#target-specific-reviews)
-15. [Integrated Report Format](#integrated-report-format)
-16. [Notes](#notes)
-17. [Examples](#examples)
-18. [Test Cases](#test-cases) ⭐ NEW
-
-## Changelog
-
-**2025-11-16 (v2.0)**:
-- 🔒 **Security**: Enhanced Path Traversal validation (whitelist + multiple pattern detection)
-- 🔒 **Security**: Implemented MR/PR Rate Limiting (10 requests/day, file-based persistence)
-- ♻️ **Refactoring**: Added Configuration Constants section for centralized settings
-- ♻️ **Refactoring**: Merged Argument Parsing Implementation into Argument Validation (collapsible reference)
-- ♻️ **Refactoring**: Unified Large File Handling Strategy (3 sections → 1 common section)
-- 📝 **Docs**: Generalized error messages to prevent information leakage
-- 📝 **Docs**: Added Table of Contents and Changelog
-- ✅ **Testing**: Added 22 comprehensive test cases covering all validation paths
-- 🎯 **Quality**: Exit Code constants (EXIT_SUCCESS, EXIT_USER_ERROR, EXIT_SECURITY_ERROR, EXIT_SYSTEM_ERROR)
-- 🎯 **Quality**: file:line references added to all error messages (100% coverage)
-
-**Impact**: 100% LLM implementation quality, improved security (3-layer path validation), enhanced maintainability (reduced duplication), comprehensive test coverage
 
 ## Overview
 
@@ -53,26 +17,12 @@ Review code, configuration, or documentation from multiple perspectives to disco
 ## Quick Start
 
 ```bash
-# Basic usage (4 perspectives: necessity, security, performance, maintainability)
 /iterative-review src/components/Button.tsx
-
-# Configuration file review (discover redundant parts to delete)
 /iterative-review README.md
-
-# Necessity review only (fastest evaluation of deletion/simplification potential)
-/iterative-review feature.ts --perspectives=necessity --rounds=1
-
-# Constructive review (skip Round 0, only propose improvements)
-# Use for features with proven value or during new feature implementation
+/iterative-review file.ts --perspectives=necessity --rounds=1
 /iterative-review file.ts --skip-necessity
-
-# Custom perspective specification
 /iterative-review file.ts --perspectives=necessity,security,accessibility
-
-# Full directory review (discover unnecessary files/features)
 /iterative-review src/components/
-
-# MR/PR review (evaluate if large changes are truly necessary)
 /iterative-review --mr 123
 /iterative-review --pr 456
 ```
@@ -95,13 +45,6 @@ Review code, configuration, or documentation from multiple perspectives to disco
 
 **Complete list** (for validation):
 necessity, security, performance, maintainability, accessibility, i18n, testing, documentation, consistency, scalability, simplicity
-
-This list is referenced in:
-- Argument Validation (line 68)
-- Argument Parsing Implementation (line 94)
-- Validation Implementation (line 198)
-- Error Handling (line 250)
-- Perspective Customization (line 598)
 
 ## Argument Validation and Parsing
 
@@ -820,12 +763,6 @@ For Default Mode, Priority Action Plan considers Round 0 decision:
 - If simplification recommended: Prioritize major simplification; defer minor improvements
 - If retention justified: Implement all improvements in priority order
 
-## Notes
-
-- Session independence: Each round executes as a new session
-- Time management: Target 5-10 minutes per round
-- Emphasis on specifics: Specify filename:line number, not abstract issues
-- Constructive attitude: Present solutions, not just problem identification
 
 ## Examples
 
@@ -840,222 +777,3 @@ Action: Execute necessity review only on feature.ts
 
 Input: /iterative-review
 Action: Interactive mode, use AskUserQuestion to select target
-
-## Test Cases
-
-### Path Traversal Validation Tests
-
-**Test 1: Basic path traversal (should FAIL)**
-```bash
-/iterative-review "../../../etc/passwd"
-# Expected: ERROR: Path traversal detected
-# Exit code: 2
-```
-
-**Test 2: URL-encoded path traversal (should FAIL)**
-```bash
-/iterative-review "%2e%2e/secret/config"
-# Expected: ERROR: Path traversal detected
-# Exit code: 2
-```
-
-**Test 3: Double URL-encoded path traversal (should FAIL)**
-```bash
-/iterative-review "%252e%252e/root/file"
-# Expected: ERROR: Path traversal detected
-# Exit code: 2
-```
-
-**Test 4: Invalid characters (should FAIL)**
-```bash
-/iterative-review "file;rm -rf /"
-# Expected: ERROR: Invalid characters in path
-# Exit code: 2
-```
-
-**Test 5: Legitimate dotfile (should PASS)**
-```bash
-/iterative-review ".github/workflows/ci.yml"
-# Expected: Review executes successfully
-# Exit code: 0
-```
-
-**Test 6: Legitimate path with dots (should PASS)**
-```bash
-/iterative-review "src/utils/file.test.ts"
-# Expected: Review executes successfully
-# Exit code: 0
-```
-
-### MR/PR Rate Limiting Tests
-
-**Test 7: First request (should PASS)**
-```bash
-/iterative-review --mr 1
-# Expected: Review executes successfully
-# Counter file created: /tmp/.claude_iterative_review_mr_count_YYYYMMDD
-# Counter value: 1
-```
-
-**Test 8: 10th request (should PASS)**
-```bash
-# Execute 10 times sequentially
-for i in {1..10}; do /iterative-review --mr $i; done
-# Expected: All 10 requests succeed
-# Counter value: 10
-```
-
-**Test 9: 11th request (should FAIL)**
-```bash
-/iterative-review --mr 11
-# Expected: ERROR: Daily MR/PR request limit exceeded (max: 10 per day)
-# Exit code: 1
-```
-
-**Test 10: MR number out of range (should FAIL)**
-```bash
-/iterative-review --mr 1000000
-# Expected: ERROR: MR/PR number must be between 1 and 999999
-# Exit code: 1
-```
-
-**Test 11: Daily reset verification**
-```bash
-# Day 1: Execute 10 requests (counter = 10)
-# Day 2: New counter file with different date
-# Execute 1 request → should PASS
-# Expected: Counter resets to 1 on new day
-```
-
-### Argument Validation Tests
-
-**Test 12: Invalid rounds (should FAIL)**
-```bash
-/iterative-review file.ts --rounds=0
-# Expected: ERROR: rounds must be positive integer, got: 0
-# Exit code: 1
-```
-
-**Test 13: Invalid perspective (should FAIL)**
-```bash
-/iterative-review file.ts --perspectives=invalid
-# Expected: ERROR: Invalid perspective 'invalid' - see iterative-review.md:51-66
-# Exit code: 1
-```
-
-**Test 14: Unknown flag (should FAIL)**
-```bash
-/iterative-review file.ts --unknown-flag
-# Expected: ERROR: Unknown flag: --unknown-flag
-# Exit code: 1
-```
-
-**Test 15: --skip-necessity removes necessity**
-```bash
-/iterative-review file.ts --skip-necessity
-# Expected: PERSPECTIVES variable does not contain "necessity"
-# Expected: ROUNDS=3 (if not explicitly overridden)
-```
-
-### Interactive Mode Tests
-
-**Test 16: No target specified (should trigger interactive mode)**
-```bash
-/iterative-review
-# Expected: AskUserQuestion executed to select target type
-# Options: File, Directory, MR/PR
-```
-
-**Test 17: Interactive mode - File selection**
-```bash
-# User selects "File" → AskUserQuestion for path
-# User enters "src/App.tsx" → validation → review execution
-```
-
-**Test 18: Interactive mode - MR/PR selection**
-```bash
-# User selects "MR/PR" → AskUserQuestion for number
-# User enters "123" → validate_mr_number → review execution
-```
-
-### Large File Handling Tests
-
-**Test 19: File >2000 lines (should use chunked reading)**
-```bash
-/iterative-review large-file.ts
-# Expected: Read tool called multiple times with offset parameter
-# First: offset=0, limit=2000
-# Second: offset=2000, limit=2000
-# Continue until EOF
-```
-
-**Test 20: File <2000 lines (should use single read)**
-```bash
-/iterative-review small-file.ts
-# Expected: Read tool called once without offset
-# offset=0 (default), limit=2000
-```
-
-### Configuration Constants Tests
-
-**Test 21: Default values applied**
-```bash
-/iterative-review file.ts
-# Expected: ROUNDS=4 (DEFAULT_ROUNDS)
-# Expected: PERSPECTIVES="necessity,security,performance,maintainability" (DEFAULT_PERSPECTIVES)
-```
-
-**Test 22: Override defaults**
-```bash
-/iterative-review file.ts --rounds=2 --perspectives=security,performance
-# Expected: ROUNDS=2 (overridden)
-# Expected: PERSPECTIVES="security,performance" (overridden)
-```
-
-## Test Execution Guidelines
-
-**Manual Testing**:
-1. Execute each test case sequentially
-2. Verify expected output and exit code
-3. Check counter file for MR/PR tests: `cat /tmp/.claude_iterative_review_mr_count_$(date +%Y%m%d)`
-4. Clean up counter file after testing: `rm /tmp/.claude_iterative_review_mr_count_*`
-
-**Automated Testing** (future implementation):
-```bash
-#!/bin/bash
-# test-iterative-review.sh
-
-run_test() {
-  local test_name="$1"
-  local command="$2"
-  local expected_exit_code="$3"
-
-  echo "Running: $test_name"
-  $command
-  actual_exit_code=$?
-
-  if [[ $actual_exit_code -eq $expected_exit_code ]]; then
-    echo "✓ PASS: $test_name"
-  else
-    echo "✗ FAIL: $test_name (expected: $expected_exit_code, got: $actual_exit_code)"
-  fi
-}
-
-# Path Traversal Tests
-run_test "Test 1: Basic path traversal" "/iterative-review '../../../etc/passwd'" 2
-run_test "Test 2: URL-encoded traversal" "/iterative-review '%2e%2e/secret'" 2
-
-# Add more tests...
-```
-
-## Test Coverage
-
-| Category | Tests | Coverage |
-|----------|-------|----------|
-| Path Traversal | 6 | Attack patterns, valid paths |
-| MR/PR Rate Limiting | 5 | Limits, overflow, reset |
-| Argument Validation | 4 | Invalid inputs, flags |
-| Interactive Mode | 3 | Target selection flows |
-| Large File Handling | 2 | Chunked vs single read |
-| Configuration | 2 | Defaults vs overrides |
-| **Total** | **22** | **Comprehensive** |

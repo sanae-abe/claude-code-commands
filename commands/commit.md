@@ -127,122 +127,13 @@ Never expose absolute file paths in error messages
 Never expose stack traces or internal details
 Report only user-actionable information
 
-## Conventional Commits Reference
 
-### Type Definitions
-
-- **feat**: New feature for users (e.g., new UI component, API endpoint)
-- **fix**: Bug fix for users (e.g., resolve crash, fix incorrect behavior)
-- **refactor**: Code restructuring without functional changes
-- **docs**: Documentation only changes (README, comments, guides)
-- **style**: Code formatting, whitespace, missing semicolons (no logic change)
-- **test**: Adding or modifying tests
-- **chore**: Build process, dependencies, tooling, configuration
-- **perf**: Performance improvements
-
-### Message Structure
-
-```
-<type>(<scope>): <subject>
-
-<optional body>
-
-<optional footer>
-```
-
-Examples:
-- `✨ feat(ui): add dark mode toggle`
-- `🐛 fix(api): handle null response from user service`
-- `📝 docs: add API usage examples to README`
-- `♻️ refactor(core): extract validation logic to separate module`
-- `⚡️ perf(ui): lazy load images in gallery component`
-
-### Best Practices
-
-- Use imperative mood: "add feature" not "added feature"
-- Keep subject line under 72 characters
-- Separate subject from body with blank line
-- Use body to explain what and why, not how
-- Reference issues/tickets in footer when applicable
-
-## Integration with Other Commands
-
-After commit:
-- `/pr` or `/mr`: Create pull/merge request
-- Quality checks: Recommend setting up pre-commit hooks for automated linting, testing
-
-Pre-commit hooks recommendation:
-For automated quality checks, configure pre-commit hooks to run:
-- Linting (ESLint, Prettier, etc.)
-- Type checking (TypeScript, mypy, etc.)
-- Tests (unit tests, integration tests)
-- Security scans (secret detection, dependency audits)
 
 ## Examples
 
-Input: /commit "feat(ui): add user profile component"
-Action: Validate format, add emoji ✨, execute commit with message "✨ feat(ui): add user profile component"
-
-Input: /commit "fix: resolve authentication timeout"
-Action: Validate format, add emoji 🐛, execute commit with message "🐛 fix: resolve authentication timeout"
-
-Input: /commit
-Action: Interactive mode, use AskUserQuestion to select type (e.g., "feat"), select scope (e.g., "api"), generate message "✨ feat(api): [user completes subject]"
-
-Input: /commit --no-verify
-Action: Interactive mode, skip pre-commit hooks when executing git commit
-
-Input: /commit "update docs"
-Action: Report error "Conventional Commits format required: type(scope): subject. Example: docs: update installation guide"
-
-Input: /commit "feat(api): add payment processing"
-Action (Pre-commit hook failure):
-```
-✓ Branch validation passed (feature/payment)
-✓ Sensitive file validation passed
-✓ Conventional Commit format valid
-
-ERROR: Pre-commit hook failed (exit code: 1)
-Likely cause: TypeScript type errors
-Fix: npm run type-check
-
-Affected files:
-  - src/api/payment.ts (3 errors)
-
-Suggestions:
-1. Fix type errors: npm run type-check
-2. Auto-fix ESLint: npm run lint:fix
-3. Skip hooks (NOT recommended): /commit --no-verify
-```
-
-Input: /commit "fix(auth): resolve login timeout" (on main branch)
-Action (Branch protection):
-```
-ERROR: Direct commits to 'main' are not allowed
-Security policy: Use feature branches for development
-
-Create a feature branch:
-  /branch feature fix-login-timeout
-  git checkout -b feature/fix-login-timeout
-```
-
-Input: /commit "chore: update dependencies" (with .env staged)
-Action (Sensitive file detection):
-```
-ERROR: Sensitive file detected: .env
-Security policy: Sensitive files must not be committed
-
-Resolution:
-  1. Unstage file: git reset HEAD .env
-  2. Add to .gitignore: echo '.env' >> .gitignore
-  3. Use environment variables instead
-```
-
-## Notes
-
-This command focuses on creating well-formatted Conventional Commits with emoji annotations. For automated quality checks, configure pre-commit hooks in your repository. The LLM can analyze changed files to suggest appropriate scope based on file patterns and directories.
-
----
+/commit "feat(ui): add user profile component" → Execute commit with "✨ feat(ui): add user profile component"
+/commit → Interactive mode, use AskUserQuestion to select type and scope
+/commit "update docs" → Report error "Conventional Commits format required: type(scope): subject"
 
 ## Security Implementation
 

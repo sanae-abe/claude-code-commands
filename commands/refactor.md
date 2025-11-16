@@ -40,7 +40,8 @@ validate_target() {
   fi
 
   # Reject command injection characters
-  if [[ "$target" =~ [;\`\$\(\)\&\|\*\?\[\]\{\}\<\>\!] ]]; then
+  local injection_pattern='[;`$()&|*?[]{}<>!]'
+  if [[ "$target" =~ $injection_pattern ]]; then
     echo "ERROR: Invalid characters in target"
     echo "Allowed: alphanumeric, spaces, hyphens, underscores, slashes, dots"
     exit 2

@@ -38,7 +38,8 @@ validate_bug_description() {
   fi
 
   # Reject command injection characters
-  if [[ "$description" =~ [;\`\$\(\)\&\|\*\?\[\]\{\}\<\>\!\n\r] ]]; then
+  local injection_pattern='[;`$()&|*?[]{}<>!\n\r]'
+  if [[ "$description" =~ $injection_pattern ]]; then
     echo "ERROR: Invalid characters in bug description"
     echo "Allowed: alphanumeric, spaces, punctuation (.,!?:-'\")"
     exit 2
