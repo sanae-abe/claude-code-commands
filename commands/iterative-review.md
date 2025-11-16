@@ -40,45 +40,158 @@ Review code, configuration, or documentation from multiple perspectives to disco
 /iterative-review --pr 456
 ```
 
+## Variable Reference
+
+**$ARGUMENTS**: Automatically populated by Claude Code slash command system
+- Contains all arguments passed after `/iterative-review`
+- Example: `/iterative-review foo.ts --rounds=2` → `$ARGUMENTS = "foo.ts --rounds=2"`
+- Empty if no arguments provided → triggers interactive mode (line 448-450)
+- Type: string (space-separated arguments)
+
+## Allowed Perspectives
+
+**Default perspectives** (4 total):
+- necessity, security, performance, maintainability
+
+**Optional perspectives** (7 total):
+- accessibility, i18n, testing, documentation, consistency, scalability, simplicity
+
+**Complete list** (for validation):
+necessity, security, performance, maintainability, accessibility, i18n, testing, documentation, consistency, scalability, simplicity
+
+This list is referenced in:
+- Argument Validation (line 65)
+- Error Handling (line 141)
+- Perspective Customization (line 324-333)
+- Validation Functions (line 94-98)
+
 ## Argument Validation
 
 Parse and validate $ARGUMENTS before execution:
 
 Extract target:
-- File path: validate exists, reject ../ or paths outside project
-- Directory: validate exists and is directory
-- MR/PR number: validate via --mr or --pr flag with positive integer
+- File path: validate with validatePath() function (see Validation Functions section)
+  - Normalize path (resolve symlinks, convert to absolute)
+  - Reject path traversal: ../, ../../, %2e%2e/, ....//
+  - Validate boundaries: must be within project root OR home directory
+- Directory: validate exists and is directory (after path validation)
+- MR/PR number: validate via --mr or --pr flag, range 1-999999, max 10 per session
 
 Parse optional flags:
 - --rounds=N: validate positive integer (default: 4)
-- --perspectives=list: validate against allowed perspectives (default: necessity,security,performance,maintainability)
+- --perspectives=list: validate with validatePerspectives() function (default: necessity,security,performance,maintainability)
 - --skip-necessity: boolean flag (default: false)
 
 Sanitize all arguments:
-- Escape special characters before Bash execution
+- Use validatePath() for all file/directory inputs
 - Reject unexpected flag patterns
-- Validate perspective names against allowed list: necessity, security, performance, maintainability, accessibility, i18n, testing, documentation, consistency, scalability, simplicity
+- Never pass unsanitized input to Bash commands
+- Use Grep/Glob/Read tools instead of Bash for file operations
 
 If validation fails: report expected format and exit
 If target not found: report error with example usage
 
+## Validation Functions
+
+Implement these validation checks before execution:
+
+### Path Validation
+```typescript
+function validatePath(path: string): boolean {
+  // 1. Normalize path (resolve symlinks, convert to absolute)
+  const normalized = resolvePath(path)
+
+  // 2. Check for path traversal patterns
+  const dangerousPatterns = ['../', '../../', '%2e%2e/', '....//']
+  if (dangerousPatterns.some(p => normalized.includes(p))) {
+    return false
+  }
+
+  // 3. Validate path boundaries (must be within project or home directory)
+  const projectRoot = process.cwd()
+  const homeDir = process.env.HOME
+  if (!normalized.startsWith(projectRoot) && !normalized.startsWith(homeDir)) {
+    return false
+  }
+
+  return true
+}
+```
+
+### Perspective Validation
+```typescript
+const ALLOWED_PERSPECTIVES = [
+  'necessity', 'security', 'performance', 'maintainability',
+  'accessibility', 'i18n', 'testing', 'documentation',
+  'consistency', 'scalability', 'simplicity'
+]
+
+function validatePerspectives(list: string[]): boolean {
+  return list.every(p => ALLOWED_PERSPECTIVES.includes(p))
+}
+```
+
+### MR/PR Number Validation
+```typescript
+function validateMRNumber(num: number): boolean {
+  // Range: 1-999999
+  // Rate limit: track in session, max 10 reviews
+  return num >= 1 && num <= 999999
+}
+```
+
 ## Error Handling
 
-Argument errors:
-If target missing: use AskUserQuestion to select file/directory
-If invalid rounds: report "rounds must be positive integer, got: [value]"
-If invalid perspective: report "allowed perspectives: necessity, security, performance, maintainability, accessibility, i18n, testing, documentation, consistency, scalability, simplicity"
-If path contains ..: report "paths cannot contain ../ for security reasons"
+### Error Handling Pattern
 
-Execution errors:
-If file read fails: report "cannot read [filename]: check permissions"
-If git operation fails (MR/PR): report "git operation failed: ensure repository is valid"
-If unrecoverable error: report error type and user-actionable guidance
+When errors occur, follow this pattern:
 
-Security:
-Never expose absolute file paths
-Never expose stack traces or internal details
-Report only user-actionable information
+```typescript
+// 1. Detect error condition
+if (!isValid) {
+  // 2. Report error to user (safe message)
+  reportError("Error message")
+
+  // 3. Update TodoWrite status
+  TodoWrite([...todos.map(t =>
+    t.status === "in_progress" ? {...t, status: "failed"} : t
+  )])
+
+  // 4. Stop execution (do not continue)
+  return
+}
+```
+
+### Error Categories and Messages
+
+**Argument errors**:
+- Target missing: use AskUserQuestion to select file/directory (interactive mode)
+- Invalid rounds: "rounds must be positive integer, got: [value]"
+- Invalid perspective: "invalid perspective - see Allowed Perspectives section for complete list"
+- Path traversal detected: "invalid path: security validation failed"
+
+**Execution errors**:
+- File read fails: "target not found or inaccessible"
+- Git operation fails: "review operation failed"
+- Tool error: "operation failed: [tool name] unavailable"
+- Unrecoverable error: "operation failed - verify input and retry"
+
+**Security guidelines**:
+- Never expose absolute file paths (use relative names only)
+- Never expose stack traces or internal details
+- Never confirm file existence/non-existence in error messages
+- Report only user-actionable information
+
+### Exit Code System
+
+LLM should handle execution outcomes as follows:
+
+- **Success**: Continue to next todo, mark current as completed
+- **User Error** (invalid input): Report error, mark todo as failed, stop execution
+- **Security Error** (path traversal): Report error, mark todo as failed, stop execution
+- **System Error** (tool failure): Report error, mark todo as failed, suggest retry
+
+Never silently fail. Always update TodoWrite status before stopping.
 
 ## Basic Approach
 
@@ -106,18 +219,15 @@ Use TodoWrite to track progress:
 
 Argument parsing logic:
 
-```bash
-# Default settings
-PERSPECTIVES="necessity,security,performance,maintainability"
-ROUNDS=4
-SKIP_NECESSITY=false
+Parse $ARGUMENTS string to extract:
+- Target path (first non-flag argument)
+- --rounds=N flag (default: 4)
+- --perspectives=list flag (default: necessity,security,performance,maintainability)
+- --skip-necessity flag (boolean, default: false)
 
-# If --skip-necessity is specified
-if [[ "$SKIP_NECESSITY" == true ]]; then
-    PERSPECTIVES="security,performance,maintainability"
-    ROUNDS=3
-fi
-```
+If --skip-necessity is true:
+  - Remove "necessity" from perspectives list
+  - Set rounds to 3 (unless explicitly overridden)
 
 ## Review Perspective Definitions
 
@@ -175,12 +285,19 @@ Key check items:
 - OWASP compliance: Response status to each OWASP Top 10 item
 
 Analysis methods:
-```bash
+Use Claude Code tools (NOT Bash commands) for safe, efficient analysis:
+
+```markdown
 # Search for sensitive information
-rg -i "password|api_key|secret|token" --type typescript
+Grep tool with pattern: "password|api_key|secret|token"
+  - flags: {"-i": true} (case-insensitive)
+  - type: "typescript"
 
 # Check for dangerous function usage
-rg "dangerouslySetInnerHTML|eval\(|Function\(|execSync" --type typescript
+Grep tool with pattern: "dangerouslySetInnerHTML|eval\\(|Function\\(|execSync"
+  - type: "typescript"
+
+NEVER use Bash rg/grep/find directly - security risk.
 ```
 
 ### Round 2: Performance Perspective
@@ -195,12 +312,18 @@ Key check items:
 - Caching: Implementation of appropriate cache strategies
 
 Analysis methods:
-```bash
+Use Claude Code tools for performance analysis:
+
+```markdown
 # Detect API calls in loops
-rg "for.*await|while.*await|\.map\(async" --type typescript
+Grep tool with pattern: "for.*await|while.*await|\\.map\\(async"
+  - type: "typescript"
+  - output_mode: "content" (to see context)
 
 # Identify large files
-find . -type f \( -name "*.ts" -o -name "*.tsx" \) -exec wc -l {} + | sort -rn | head -10
+Glob tool with pattern: "**/*.{ts,tsx}"
+  - Then use Read tool to check file sizes
+  - Or use Bash: wc -l on specific files only (not find)
 ```
 
 ### Round 3: Maintainability Perspective
@@ -216,12 +339,19 @@ Key check items:
 - Scalability: Response to future expansion
 
 Analysis methods:
-```bash
+Use Claude Code tools for maintainability analysis:
+
+```markdown
 # Check for missing type annotations
-rg ": any|as any" --type typescript
+Grep tool with pattern: ": any|as any"
+  - type: "typescript"
+  - output_mode: "content"
 
 # Detect code duplication
-rg -n "function.*\{" --type typescript | awk -F: '{print $2}' | sort | uniq -c | sort -rn | head -10
+Grep tool with pattern: "function.*\\{"
+  - type: "typescript"
+  - output_mode: "count" (shows frequency by file)
+  - Manual analysis required for actual duplication detection
 ```
 
 ## Review Mode Selection
@@ -263,18 +393,10 @@ Usage examples:
 
 ## Perspective Customization
 
-Perspectives other than defaults can be specified:
+Perspectives other than defaults can be specified. See "Allowed Perspectives" section for the complete list.
 
-### Additional Perspective Examples
-
-- **necessity**: Necessity evaluation (Round 0) ← **Included by default**
-- **accessibility**: Accessibility (WCAG compliance)
-- **i18n**: Internationalization support
-- **testing**: Test coverage/quality
-- **documentation**: Documentation completeness
-- **consistency**: Coding conventions/consistency
-- **scalability**: Scalability
-- **simplicity**: Simplicity/complexity evaluation
+**Default**: necessity, security, performance, maintainability
+**All options**: See line 51-66 for complete list and descriptions
 
 ### Custom Perspective Usage Examples
 
@@ -307,7 +429,9 @@ Additional check items:
 
 ## Integrated Report Format
 
-After all rounds complete, generate an integrated report in the following format:
+After all rounds complete, generate an integrated report. Format varies based on --skip-necessity flag:
+
+### Default Mode (with Round 0)
 
 ```markdown
 # Iterative Review Results
@@ -316,7 +440,7 @@ After all rounds complete, generate an integrated report in the following format
 - Target: [filename/directory/MR number]
 - Type: [TypeScript/Python/Document, etc.]
 - Review Date/Time: [YYYY-MM-DD HH:MM]
-- Number of Perspectives: [4 (necessity, security, performance, maintainability)]
+- Number of Perspectives: 4 (necessity, security, performance, maintainability)
 
 ## Round 0: Necessity Review
 
@@ -341,6 +465,32 @@ Alternative: [Specific alternative means for deletion/simplification case]
 Recommend Deletion / Recommend Simplification / Justified Retention
 
 Note: If Round 0 recommends deletion, detailed improvements from subsequent rounds are treated as reference information
+```
+
+### Constructive Mode (--skip-necessity)
+
+```markdown
+# Iterative Review Results
+
+## Basic Information
+- Target: [filename/directory/MR number]
+- Type: [TypeScript/Python/Document, etc.]
+- Review Date/Time: [YYYY-MM-DD HH:MM]
+- Number of Perspectives: 3 (security, performance, maintainability)
+- Mode: Constructive Review (necessity evaluation skipped)
+
+## Round 1: Security Perspective
+[Findings and recommended actions]
+
+## Round 2: Performance Perspective
+[Findings and recommended actions]
+
+## Round 3: Maintainability Perspective
+[Findings and recommended actions]
+
+## Overall Evaluation
+
+Note: Necessity evaluation was skipped. This review focuses on improving existing implementation
 
 ### Findings Summary
 - Critical: [X items]
@@ -349,25 +499,32 @@ Note: If Round 0 recommends deletion, detailed improvements from subsequent roun
 
 ### Priority Action Plan
 
-Top Priority (Fundamental response based on Round 0 decision):
-[Specific steps for deletion/simplification/improvement]
+High Priority (Critical Issues):
+[Response to Critical Issues with file:line references]
 
-High Priority (Only if retention is justified):
-[Response to Critical Issues]
-
-Medium Priority (Only if retention is justified):
+Medium Priority (Important Issues):
 [Response to Important Issues]
+
+Low Priority (Minor Improvements):
+[Optional improvements]
 
 ### Overall Observations
 
-Round 0 Decision Impact:
-- Recommend deletion: This feature is fundamentally unnecessary. No need to implement subsequent improvement proposals.
-- Recommend simplification: Current implementation is excessive. Prioritize major simplification; defer minor improvements.
-- Justified retention: Clear value exists; worth implementing the following improvements.
-
 Overall Assessment:
-[Comprehensive direction considering Round 0 decision]
+[Comprehensive improvement direction]
 ```
+
+### Common Elements (Both Modes)
+
+Both report formats include:
+- Findings Summary with severity classification (Critical/Important/Minor)
+- Priority Action Plan with specific file:line references
+- Overall Observations with actionable guidance
+
+For Default Mode, Priority Action Plan considers Round 0 decision:
+- If deletion recommended: No need to implement subsequent improvement proposals
+- If simplification recommended: Prioritize major simplification; defer minor improvements
+- If retention justified: Implement all improvements in priority order
 
 ## Notes
 
