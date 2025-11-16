@@ -15,21 +15,30 @@ This repository is my personal backup and configuration management for Claude Co
 
 ```
 claude-code-workspace/
-├── commands/              # Custom slash commands (14 commands)
+├── commands/              # Custom slash commands (23 commands)
+│   ├── analyze.md        # Project health assessment
 │   ├── branch.md         # Git branch creation with conventions
 │   ├── clean-jobs.md     # Safe background job cleanup
 │   ├── commit.md         # Conventional Commits with emoji
+│   ├── debug.md          # Universal debugging workflow
 │   ├── decide.md         # Framework-driven decision support
-│   ├── feature.md        # New feature implementation workflow
+│   ├── explain.md        # Explain project features
 │   ├── i18n-check.md     # Internationalization status check
 │   ├── implement.md      # Document-driven task implementation
 │   ├── iterative-review.md  # Multi-perspective code review
+│   ├── optimize.md       # Performance optimization
 │   ├── plan-review.md    # Implementation planning with review
+│   ├── refactor.md       # Safe incremental refactoring
+│   ├── research.md       # Systematic technology research
+│   ├── review-pr.md      # GitLab MR/GitHub PR review
 │   ├── review-quality.md # LLM implementation quality evaluation
+│   ├── serena.md         # Semantic code analysis (MCP)
 │   ├── ship.md           # GitHub PR/GitLab MR creation
 │   ├── todo.md           # Intelligent task management
+│   ├── update-docs.md    # Documentation synchronization
 │   ├── validate.md       # Multi-layer quality gate validation
-│   └── worktree.md       # Git worktree management for parallel development
+│   ├── web-dev.md        # Frontend development server
+│   └── worktree.md       # Git worktree management
 ├── stacks/                # Technology stack configurations (6 stacks)
 │   ├── backend-api.md    # Backend API development settings
 │   ├── data-science.md   # Data science workflow settings
@@ -108,9 +117,37 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Usage: `/plan-review "feature name" [--rounds=3] [--perspectives=security,performance]`
 - Task breakdown, automatic review, tasks.yml updates
 
-**`/feature`** - New feature implementation workflow
-- Usage: `/feature [feature name or requirements]`
-- Guided workflow from requirements to implementation
+### Development & Debugging
+
+**`/debug`** - Universal debugging workflow
+- Usage: `/debug "bug or issue description"`, `/debug` (interactive)
+- Systematic diagnosis and fix for any bug severity
+- Automated diagnostics, root cause identification
+
+**`/analyze`** - Project health assessment and code quality analysis
+- Usage: `/analyze [overview|quality] [--detailed|--quick|--report]`
+- Codebase structure, quality metrics, technical debt analysis
+
+**`/explain`** - Explain project features, components, and concepts
+- Usage: `/explain ComponentName [--detailed|--usage|--examples]`
+- Fast exact-match or comprehensive semantic search
+- Structured explanations with usage patterns
+
+**`/refactor`** - Safe incremental refactoring workflow
+- Usage: `/refactor [file-path|component-name]`
+- Impact analysis, incremental execution, quality validation
+
+**`/optimize`** - Performance optimization
+- Usage: `/optimize [optimization-target]`
+- Measurement, analysis, validation workflow
+
+**`/research`** - Systematic technology research
+- Usage: `/research [research-topic]`
+- Multi-source validation, knowledge documentation
+
+**`/web-dev`** - Start frontend development server
+- Usage: `/web-dev [port]`
+- Framework auto-detection (Vite, Next.js, etc.)
 
 ### Code Quality & Review
 
@@ -119,10 +156,20 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Round 0: Necessity review (deletion/simplification)
 - Security, performance, maintainability analysis
 
+**`/review-pr`** - Comprehensive GitLab MR/GitHub PR review
+- Usage: `/review-pr <MR-number> [--detailed] [--security-focus] [--performance-focus]`
+- Security-first systematic quality verification
+- Multi-perspective analysis with actionable feedback
+
 **`/review-quality`** - Evaluate LLM implementation quality
 - Usage: `/review-quality <file-path> [--report=text|json]`
 - CLAUDE.md and slash command quality evaluation
 - LLM-friendly scoring with actionable feedback
+
+**`/serena`** - Semantic code analysis using Serena MCP
+- Usage: `/serena [query or operation]`
+- Advanced semantic code search and analysis
+- MCP-powered intelligent code understanding
 
 **`/i18n-check`** - Internationalization status check
 - Usage: `/i18n-check [language] [--coverage|--consistency|--format|--cultural|--complete]`
@@ -132,6 +179,10 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Usage: `/validate [--layers=all|syntax,security] [--auto-fix] [--report=text|json]`
 - Layer 1-2: Syntax & formatting (auto-fix)
 - Layer 5: Security validation (OWASP, secrets scan)
+
+**`/update-docs`** - Documentation synchronization and quality validation
+- Usage: `/update-docs [--sync|--validate|--comprehensive] [--scope=critical|important]`
+- Sync with code changes, validate quality, fix broken links
 
 ### Version Control
 
