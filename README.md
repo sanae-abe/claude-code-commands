@@ -15,18 +15,21 @@ This repository is my personal backup and configuration management for Claude Co
 
 ```
 claude-code-workspace/
-├── commands/              # Custom slash commands (11 commands)
+├── commands/              # Custom slash commands (14 commands)
 │   ├── branch.md         # Git branch creation with conventions
 │   ├── clean-jobs.md     # Safe background job cleanup
 │   ├── commit.md         # Conventional Commits with emoji
 │   ├── decide.md         # Framework-driven decision support
+│   ├── feature.md        # New feature implementation workflow
 │   ├── i18n-check.md     # Internationalization status check
 │   ├── implement.md      # Document-driven task implementation
 │   ├── iterative-review.md  # Multi-perspective code review
 │   ├── plan-review.md    # Implementation planning with review
+│   ├── review-quality.md # LLM implementation quality evaluation
 │   ├── ship.md           # GitHub PR/GitLab MR creation
-│   ├── task-validate.md  # Quality validation and next actions
-│   └── todo.md           # Intelligent task management
+│   ├── todo.md           # Intelligent task management
+│   ├── validate.md       # Multi-layer quality gate validation
+│   └── worktree.md       # Git worktree management for parallel development
 ├── stacks/                # Technology stack configurations (6 stacks)
 │   ├── backend-api.md    # Backend API development settings
 │   ├── data-science.md   # Data science workflow settings
@@ -42,6 +45,9 @@ claude-code-workspace/
 ├── USER_GUIDE.md         # User-facing documentation
 ├── settings.json         # Claude Code system settings
 ├── docs/                 # Additional documentation
+│   ├── decision-frameworks.md  # ICE/RICE scoring, First Principles
+│   ├── llm-quality-framework.md  # LLM implementation quality standards
+│   └── slash-command-security-template.md  # Security template for commands
 ├── projects/             # Session history and project data
 └── scripts/              # Utility scripts
 ```
@@ -100,11 +106,11 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 
 **`/plan-review`** - Create implementation plan and review
 - Usage: `/plan-review "feature name" [--rounds=3] [--perspectives=security,performance]`
-- Task breakdown, automatic review, todo.md updates
+- Task breakdown, automatic review, tasks.yml updates
 
-**`/task-validate`** - Validate task completion and quality
-- Usage: `/task-validate [--scope=lint|test|build] [--report-only] [--auto-proceed]`
-- Quality checks, next action suggestions
+**`/feature`** - New feature implementation workflow
+- Usage: `/feature [feature name or requirements]`
+- Guided workflow from requirements to implementation
 
 ### Code Quality & Review
 
@@ -113,11 +119,26 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 - Round 0: Necessity review (deletion/simplification)
 - Security, performance, maintainability analysis
 
+**`/review-quality`** - Evaluate LLM implementation quality
+- Usage: `/review-quality <file-path> [--report=text|json]`
+- CLAUDE.md and slash command quality evaluation
+- LLM-friendly scoring with actionable feedback
+
 **`/i18n-check`** - Internationalization status check
 - Usage: `/i18n-check [language] [--coverage|--consistency|--format|--cultural|--complete]`
 - Translation coverage, consistency, format validation
 
+**`/validate`** - Multi-layer quality gate validation
+- Usage: `/validate [--layers=all|syntax,security] [--auto-fix] [--report=text|json]`
+- Layer 1-2: Syntax & formatting (auto-fix)
+- Layer 5: Security validation (OWASP, secrets scan)
+
 ### Version Control
+
+**`/worktree`** - Git worktree management for parallel development
+- Usage: `/worktree [create|list|switch|merge|delete|status] [branch-name]`
+- Parallel development workflows, port management
+- Safe cleanup and merge operations
 
 **`/branch`** - Create Git branch following Conventional Branch naming
 - Usage: `/branch [type] [description]`, `/branch` (interactive)
@@ -137,8 +158,9 @@ ln -sf ~/projects/claude-code-workspace/stacks/*.md ~/.claude/stacks/
 ### Utilities
 
 **`/clean-jobs`** - Safe cleanup of background jobs
-- Usage: `/clean-jobs`
-- Session-scoped, interactive cleanup options
+- Usage: `/clean-jobs [--auto]`
+- Pattern-based auto-classification (dev servers, DB, Docker)
+- Session-scoped, safe cleanup operations
 
 ## 🎯 Technology Stack Configurations
 
@@ -262,5 +284,5 @@ MIT License - Personal use
 
 ---
 
-**Last Updated**: 2025-11-13
+**Last Updated**: 2025-11-16
 **Status**: Active personal workspace
