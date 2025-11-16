@@ -195,6 +195,49 @@ Action: Interactive mode, skip pre-commit hooks when executing git commit
 Input: /commit "update docs"
 Action: Report error "Conventional Commits format required: type(scope): subject. Example: docs: update installation guide"
 
+Input: /commit "feat(api): add payment processing"
+Action (Pre-commit hook failure):
+```
+✓ Branch validation passed (feature/payment)
+✓ Sensitive file validation passed
+✓ Conventional Commit format valid
+
+ERROR: Pre-commit hook failed (exit code: 1)
+Likely cause: TypeScript type errors
+Fix: npm run type-check
+
+Affected files:
+  - src/api/payment.ts (3 errors)
+
+Suggestions:
+1. Fix type errors: npm run type-check
+2. Auto-fix ESLint: npm run lint:fix
+3. Skip hooks (NOT recommended): /commit --no-verify
+```
+
+Input: /commit "fix(auth): resolve login timeout" (on main branch)
+Action (Branch protection):
+```
+ERROR: Direct commits to 'main' are not allowed
+Security policy: Use feature branches for development
+
+Create a feature branch:
+  /branch feature fix-login-timeout
+  git checkout -b feature/fix-login-timeout
+```
+
+Input: /commit "chore: update dependencies" (with .env staged)
+Action (Sensitive file detection):
+```
+ERROR: Sensitive file detected: .env
+Security policy: Sensitive files must not be committed
+
+Resolution:
+  1. Unstage file: git reset HEAD .env
+  2. Add to .gitignore: echo '.env' >> .gitignore
+  3. Use environment variables instead
+```
+
 ## Notes
 
 This command focuses on creating well-formatted Conventional Commits with emoji annotations. For automated quality checks, configure pre-commit hooks in your repository. The LLM can analyze changed files to suggest appropriate scope based on file patterns and directories.
@@ -206,12 +249,74 @@ This command focuses on creating well-formatted Conventional Commits with emoji 
 **MANDATORY: Execute these validations BEFORE ANY commit operation**
 
 ```bash
-# 1. Validate Conventional Commit format
+# 1. Validate protected branches (prevent direct commits to main/master)
+validate_protected_branch() {
+  local current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+  if [[ -z "$current_branch" ]]; then
+    echo "ERROR: Not in a git repository"
+    exit 3
+  fi
+
+  # Protected branch patterns (use variable to avoid regex parsing issues)
+  local protected_pattern='^(main|master)$'
+  if [[ "$current_branch" =~ $protected_pattern ]]; then
+    echo "ERROR: Direct commits to '$current_branch' are not allowed"
+    echo "Security policy: Use feature branches for development"
+    echo ""
+    echo "Create a feature branch:"
+    echo "  /branch feature your-feature-name"
+    echo "  git checkout -b feature/your-feature-name"
+    exit 2
+  fi
+
+  echo "✓ Branch validation passed ($current_branch)"
+  return 0
+}
+
+# 2. Validate sensitive files (prevent accidental commit of secrets)
+validate_sensitive_files() {
+  # Sensitive file patterns (from review-pr.md)
+  local sensitive_patterns=(.env .envrc .env.* credentials.* secrets.* *.pem *.key id_rsa .ssh/*)
+  local staged_files=$(git diff --cached --name-only 2>/dev/null)
+
+  if [[ -z "$staged_files" ]]; then
+    echo "ERROR: No staged files"
+    echo "Stage changes first: git add <files>"
+    exit 1
+  fi
+
+  # Check each staged file against sensitive patterns
+  for file in $staged_files; do
+    for pattern in "${sensitive_patterns[@]}"; do
+      if [[ "$file" == $pattern ]]; then
+        echo "ERROR: Sensitive file detected: $file"
+        echo "Security policy: Sensitive files must not be committed"
+        echo ""
+        echo "Resolution:"
+        echo "  1. Unstage file: git reset HEAD $file"
+        echo "  2. Add to .gitignore: echo '$file' >> .gitignore"
+        echo "  3. Use environment variables instead"
+        exit 2
+      fi
+    done
+  done
+
+  echo "✓ Sensitive file validation passed"
+  return 0
+}
+
+# 3. Validate Conventional Commit format
 validate_conventional_commit() {
   local message="$1"
 
-  # Check format: type(scope): subject
-  if [[ ! "$message" =~ ^(feat|fix|refactor|docs|style|test|chore|perf)(\([a-z0-9_-]+\))?:\ .+ ]]; then
+  # Centralized type definitions (single source of truth)
+  local allowed_types=("feat" "fix" "refactor" "docs" "style" "test" "chore" "perf")
+  local type_regex=$(IFS="|"; echo "${allowed_types[*]}")
+
+  # Check format: type(scope): subject (use variable to avoid regex parsing issues)
+  local format_pattern="^($type_regex)(\([a-z0-9_-]+\))?:\ .+"
+  if [[ ! "$message" =~ $format_pattern ]]; then
     echo "ERROR: Invalid Conventional Commit format"
     echo "Expected: type(scope): subject"
     echo "Got: $message"
@@ -287,10 +392,28 @@ COMMIT_FLAGS=("${args[@]:1}")
 
 # Sanitize commit message (allow alphanumeric, spaces, common punctuation)
 if [[ -n "$COMMIT_MSG" ]]; then
-  # Detect injection attempts
-  if [[ "$COMMIT_MSG" =~ [\`\$\(] ]]; then
+  # Detect command injection attempts (use variable to avoid regex parsing issues)
+  local dangerous_chars='[\`\$\(]'
+  if [[ "$COMMIT_MSG" =~ $dangerous_chars ]]; then
     echo "ERROR: Dangerous characters detected in commit message"
     exit 2
+  fi
+
+  # Detect hardcoded secrets in commit message (use variable to avoid regex parsing issues)
+  local secret_pattern='(api[_-]?key|password|secret|token|bearer|auth).{0,10}[=:].{8,}'
+  if [[ "$COMMIT_MSG" =~ $secret_pattern ]]; then
+    echo "WARNING: Possible secret detected in commit message"
+    echo "Pattern matched: ${BASH_REMATCH[0]}"
+    echo ""
+    echo "Security risk: Secrets in commit messages are publicly visible"
+    echo "Review message carefully before committing"
+    echo ""
+    read -p "Continue anyway? (y/N): " confirm
+    local confirm_pattern='^[Yy]$'
+    if [[ ! "$confirm" =~ $confirm_pattern ]]; then
+      echo "Commit aborted"
+      exit 2
+    fi
   fi
 fi
 ```
