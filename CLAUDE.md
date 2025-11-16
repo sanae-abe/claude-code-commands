@@ -2,6 +2,12 @@
 
 > **このファイルについて**: LLM向けに最適化された設定ファイル。編集時もLLM最適化を維持すること。ユーザー向け情報は `~/.claude/USER_GUIDE.md` に記載。
 
+## コミュニケーション言語
+
+**ユーザーとの会話言語**: 日本語
+- 全ての応答、質問、説明を日本語で行う
+- AskUserQuestionの質問・選択肢も日本語
+
 ## 基本開発フロー
 
 ### 1. 要件分析・計画
@@ -10,187 +16,29 @@
 3. 影響範囲分析 → 依存関係ファイル確認
 4. 実装計画立案 → TodoWrite活用
 
+**不明点がある場合の対応**:
+- **曖昧指示**: AskUserQuestionで選択肢提示
+- **技術不明**: WebFetch仕様確認 + 複数案提示
+- **認識齟齬**: 停止 → 事実確認 → 学習記録作成
+- **緊急時**: セキュリティ優先、他簡略化可
+
 ### 2. 段階的実装
-1. 小タスク分割 → 優先順位付け
-2. 順次実装 → 逐次テスト・エラー修正
-3. 都度確認 → ユーザーフィードバック
-4. 最終統合 → 全体テスト・品質確認
-
-**ドキュメント駆動実装（tasks.yml使用時）**:
-- 実装前に参照ドキュメントを必ずRead（設計書、API仕様等）
-- ドキュメントの要件・制約に厳密に従う
-- acceptance_criteriaを実装完了の判断基準とする
-
-**TDD原則（テストが必要な場合）**:
-- Red: テストを先に書く（失敗を確認）
-- Green: 最小限の実装でテストを通す
-- Refactor: 重複排除、設計改善
 
 #### 実装フェーズのデフォルト動作原則
-以下の原則を実装フェーズでは常に適用：
+
+**専用ツール優先**:
+- ファイル操作: Read/Edit/Write（Bash cat/sed/echo禁止）
+- 検索: Grep/Glob（Bash find/grep禁止）
+- コード編集: Serena MCP（大規模変更時、トークン効率向上）
 
 **並列実行の最大化**:
 - 独立タスク = ファイル依存関係なし、実行順序関係なし
 - 例外: Edit後のRead、Write後のBash実行は順次実行
 - 判定迷い時 = 安全側で順次実行
 - 複数ファイル読み取り、独立した検索・分析は同時処理
-
-**Subagent活用の効率化**:
-- 複雑な探索・検索はTask tool（subagent_type=Explore）に委譲
-- Agent完了時は結果を1-2文で要約し、次アクション明示
-- 例: "3ファイルでエラー検出。修正が必要なのは auth.ts のみ"
-- 報告が長文の場合は要点3つ以内に絞る
 - 並列実行可能なagentは同時起動
 
-**Subagent起動の品質確保**:
-
-**起動時prompt必須要素**:
-- 作業ディレクトリ: `[絶対パス]`
-- 期待する成果:
-  - `subagent_type=Explore`: ファイルパス・行番号を含む検索結果
-  - その他: 変更対象ファイルの明示
-- 失敗報告: `ERROR: [理由]` で開始
-
-**完了時検証フロー**:
-```
-IF agent出力に "ERROR:" 含む:
-    作業停止 → ユーザー報告 → 再実行判断
-
-ELIF subagent_type == "Explore":
-    IF 出力に正規表現 `[^:]+:\d+` マッチあり:
-        成功 → 次タスク続行
-    ELSE:
-        Grep/Glob直接実行に切替
-
-ELSE:
-    IF 期待ファイルが実在:
-        成功 → 次タスク続行
-    ELSE:
-        検証失敗 → ユーザー報告
-```
-
-**検証コマンド**: `ls -la [パス] 2>/dev/null || echo "FAIL"`
-
-**実装進捗の可視化**:
-- 3ステップ以上のタスクは必ずTodoWrite使用
-- 各ステップ完了時に即座に status 更新
-- コードコメントやBash echoでの説明禁止、直接出力のみ
-
-**ルール適用の一貫性**:
-- 他者に指摘したルール・ガイドラインを自分の出力にも適用
-- ダブルスタンダード禁止
-
-### 3. 品質確認（技術スタック別）
-- **型安全言語**: 型エラー0件・型推論活用・strictモード
-- **動的言語**: リンター・フォーマッター・テストカバレッジ
-- **セキュリティ**: OWASP対応・入力検証・出力エスケープ
-- **テスト**: 新機能カバレッジ・既存機能影響確認
-
-#### 5層品質ゲートシステム
-
-**多層検証による段階的品質保証**:
-
-**Layer 1-2: 構文・フォーマット (syntax)**
-- TypeScript型チェック (`npx tsc --noEmit`)
-- ESLint (`npx eslint . --ext .ts,.tsx`)
-- Prettier (`npx prettier --check`)
-- 自動修正: `--auto-fix` フラグで対応
-
-**Layer 5: セキュリティ (security)** - **最重要**
-- .env変更検出 (`~/.claude/validation/check-env-changes.sh`)
-- 認証情報パターンスキャン (API_KEY, SECRET, TOKEN等)
-- OWASP Top 10チェックリスト
-- パターン辞書: `~/.claude/validation/security-patterns.json`
-
-**Layer 3-4: セマンティック・統合 (integration)**
-- テストカバレッジ (`npm test -- --coverage`)
-- API型整合性チェック（フロント/バックエンド）
-
-**実行コマンド**:
-- `/task-validate --layers=security` - セキュリティ検証のみ
-- `/task-validate --layers=syntax --auto-fix` - 構文チェック+自動修正
-- `/task-validate --layers=all --report=json` - 全層検証+JSON出力
-- `/task-validate --layers=security,syntax` - 複数層指定
-
-### 4. タスク完了・クリーンアップ
-
-#### プロセス起動時の自動分類（Bash run_in_background=true 実行直後）
-
-**判定ロジック（command文字列に対する正規表現マッチング）**:
-
-```python
-# 1. クリーンアップ対象パターン（cleanup_required）
-CLEANUP_PATTERNS = [
-    r'^(npm|yarn|pnpm|bun)\s+run\s+(dev|start|watch|serve)',
-    r'^(vite|next|webpack-dev-server|nodemon|cargo\s+watch)',
-    r'^(jest|vitest|cargo\s+test).*--watch',
-    r'^(live-server|http-server|python\s+-m\s+http\.server)',
-]
-
-# 2. 継続実行パターン（keep_running）
-KEEP_RUNNING_PATTERNS = [
-    r'^(docker|kubectl|minikube)',
-    r'^(postgres|mysql|redis-server|mongod)',
-    r'(build|compile).*--release',
-    r'^(npm|yarn|pnpm|bun)\s+run\s+build',
-]
-
-# 3. 判定不能（ask_user）
-# 上記いずれにもマッチしない場合
-```
-
-**実行フロー**:
-```
-IF command matches CLEANUP_PATTERNS:
-    shell_id にラベル付与: cleanup_required
-    IF TodoWrite使用中:
-        最終todoに追加: {content: "バックグラウンドプロセスをクリーンアップ", activeForm: "バックグラウンドプロセスをクリーンアップ中", status: "pending"}
-    ELSE:
-        内部記録: cleanup_targets.append(shell_id)
-
-ELIF command matches KEEP_RUNNING_PATTERNS:
-    shell_id にラベル付与: keep_running
-    何もしない（継続実行）
-
-ELSE:
-    AskUserQuestion即座に実行:
-        question: "バックグラウンドプロセス `{command}` をタスク完了時に自動停止しますか？"
-        options: ["はい（自動停止）", "いいえ（継続実行）"]
-    IF ユーザー選択 == "はい":
-        cleanup_required として処理
-    ELSE:
-        keep_running として処理
-```
-
-#### タスク完了時の実行トリガー
-
-**トリガー検出条件（いずれか）**:
-1. TodoWrite最終todo（最後の要素）が completed に変更された直後
-2. ユーザーメッセージに「完了」「終わり」「done」「finish」が含まれる
-3. 全todoが completed かつ 新規ユーザーメッセージ受信時
-
-**クリーンアップ実行**:
-```
-cleanup_targets = [cleanup_required ラベルの全shell_id]
-
-IF cleanup_targets が空:
-    何もしない
-
-ELIF len(cleanup_targets) == 1:
-    KillShell(cleanup_targets[0])
-    エラー無視（既に終了済みの場合）
-
-ELSE:
-    FOR EACH shell_id IN cleanup_targets:
-        KillShell(shell_id)
-        エラー無視
-```
-
-**エラーハンドリング**: 全てのKillShellエラーを無視（既に終了済み・存在しない場合は正常）
-
-## タスク管理戦略
-
-### TodoWrite使用基準
+#### TodoWrite使用基準
 
 **必須（3つ以上のステップ）**:
 - 機能実装（設計→実装→テスト）
@@ -202,59 +50,255 @@ ELSE:
 - 情報検索・質問への回答
 - 単純なコマンド実行
 
-### ドキュメント駆動タスク管理
+**進捗の可視化**:
+- 各ステップ完了時に即座に status 更新
+- コードコメントやBash echoでの説明禁止、直接出力のみ
 
-**tasks.yml による構造化タスク管理**:
-- プロジェクトルートに `tasks.yml` を配置
-- 各タスクに `docs` 配列でドキュメント参照を記載
-- `/implement` コマンドが自動的にドキュメントコンテキストを注入
+#### ドキュメント駆動実装（tasks.yml使用時）
 
-**tasks.yml 構造**:
+**前提**: `/implement [task-id]`実行時、tasks.ymlの該当タスクが読み込まれる
+
+**LLM動作**:
+1. `docs`配列の全ドキュメントを事前Read
+   - 例: `"docs/design.md#API仕様"` → design.mdの「API仕様」セクションのみ読む
+2. `acceptance_criteria`を完了判断基準とする
+3. 完了時に`status: completed`に自動更新
+
+**tasks.yml例**:
 ```yaml
-- id: task-1
-  goal: "実装目標"
-  status: pending
-  docs:
-    - "docs/design.md#SectionName"
-    - "docs/api-spec.md#Endpoint"
-  acceptance_criteria:
-    - "受入基準1"
-    - "受入基準2"
+docs: ["docs/design.md#SectionName", "docs/api.md#Endpoint"]
+acceptance_criteria: ["基準1", "基準2"]
 ```
 
-**実装ワークフロー**:
-1. `/implement task-1` 実行
-2. `docs` 配列の全ドキュメントセクションを自動Read
-3. コンテキスト注入して実装開始
-4. 完了時に `status: completed` に自動更新
+**詳細**: `commands/implement.md`
 
-## トラブル対応
+#### 並行開発の判定（最優先で評価）
 
-**判断基準**:
-- **曖昧指示**: AskUserQuestionで選択肢提示
-- **技術不明**: WebFetch仕様確認 + 複数案提示
-- **認識齟齬**: 停止 → 事実確認 → 学習記録作成
-- **緊急時**: セキュリティ優先、他簡略化可
+```python
+IF 以下のいずれか該当:
+    - 作業中 AND 緊急バグ修正が割り込み
+    - 複数機能を同時開発（影響範囲が独立）
+    - 実験的実装の並行試行（複数アプローチ比較）
+    - レビュー待ち機能あり AND 新規開発開始
+    - 現在ブランチ == "main" AND 未コミット変更あり
+THEN:
+    1. SlashCommand("/worktree create [branch-name]") 実行
+       # branch-name = feature-*/bugfix-*/experiment-*/hotfix-*
+    2. ユーザーに "cd ../worktree-[branch-name]" 提示
+    3. ポート管理: 3001, 3002, 3003... を指示
+    4. 完了後は /worktree merge [branch-name] でクリーンアップ
+    SKIP 以下の実装方法判定（worktree内で並行作業）
+```
 
----
+**タスク種別とAgent選択の判定フロー**（上から順に評価）:
 
-## コード品質基準
+```python
+# 1. TDD適用判定（新規機能のみ）
+IF タスク種別 == "新規機能実装" AND 以下のいずれか:
+    - ビジネスロジック（決済、税計算、料金計算、割引ルール等）
+    - アルゴリズム実装（ソート、検索、暗号化、圧縮等）
+    - 状態機械・ワークフロー
+    - バリデーションロジック（複雑なルール）
+    - データ変換処理（API応答変換、フォーマット変換等）
+    - project設定.development_methodology == "tdd"
+    - ユーザーが明示的にTDD要求（"TDDで〜" "テスト駆動で〜"）
+THEN:
+    tdd-orchestrator agent起動
+    # Red-Green-Refactorサイクル実施
+    # テスト先行 → 最小実装 → リファクタリング
+    SKIP 以下の判定
 
-### 型安全言語（TypeScript, Rust, Go等）
+# 2. 探索・分析タスク
+ELIF タスク種別 == "探索・検索・調査・アーキテクチャ理解":
+    Task tool (subagent_type=Explore)
+    # 判定基準:
+    # - ファイル数 ≥ 2 の横断検索
+    # - "どこで〜" "〜の実装箇所" 系の質問
+    # - アーキテクチャ・設計パターンの理解
+    # - Grep/Glob 2回以上の試行が予想される
+    SKIP 以下の実装判定
+
+# 3. 単純な実装
+ELIF ファイル数 == 1 AND 変更行数 < 50 AND 既存パターンの踏襲:
+    自分で実装（Read → Edit → フォーマッター → テスト）
+
+# 4. セキュリティリスクあり
+ELIF セキュリティリスクあり（認証・認可・入力検証・暗号化・ユーザー入力・外部データ）:
+    security-auditor agent → 実装agent（backend/frontend）
+
+# 5. デバッグ・バグ修正
+ELIF タスク種別 == "バグ調査・エラー解析・修正":
+    IF ビジネスロジック AND project設定.development_methodology == "tdd":
+        # TDD適用バグ修正
+        tdd-orchestrator agent起動
+        # 修正テスト追加（Red） → 修正実装（Green） → リファクタリング
+    ELSE:
+        # 通常バグ修正
+        debugger agent → 根本原因特定 → 修正実装
+
+# 6. リファクタリング
+ELIF タスク種別 == "リファクタリング・コード改善":
+    refactoring-specialist agent
+
+# 7. パフォーマンス最適化
+ELIF タスク種別 == "パフォーマンス改善・最適化":
+    performance-engineer agent
+
+# 8. コードレビュー（実装を伴わない）
+ELIF タスク種別 == "コードレビュー・PRレビュー・セキュリティ監査・既存コード評価":
+    # 品質基準参照: 「3. 品質確認（技術スタック別）」
+    IF セキュリティ重視 OR 認証・認可・入力検証含む:
+        security-auditor agent → code-reviewer agent（順次実行）
+    ELSE:
+        code-reviewer agent
+    # レビュー観点: 設計、アーキテクチャ、ベストプラクティス、保守性
+
+# 9. CLI/スクリプト実装判定（独立プロジェクトのみ）
+ELIF タスク種別 == "CLI実装・スクリプト作成・自動化ツール" AND
+     プロジェクト言語検出不可（package.json, Cargo.toml, go.mod等が存在しない）:
+    # 独立CLI/スクリプトの場合のみ言語選択ロジック適用
+    # 既存プロジェクト内のCLI追加は #10 技術スタック判定で処理
+    # 詳細: ~/.claude/stacks/{rust,python,shell}-cli.md
+    # セキュリティリスク判定は #4 で既に処理済み
+    IF データ処理・API連携（CSV/JSON/YAML、REST API、統計計算）:
+        python-pro agent
+    ELIF 高パフォーマンス必須（GB単位データ、並行処理、バイナリ配布）:
+        rust-pro agent
+    ELIF 軽量自動化（< 50行 AND 外部入力なし）:
+        bash-pro agent OR 自分で実装（Shell）
+    ELSE:
+        python-pro agent
+
+# 10. 技術スタック別実装agent
+ELIF tech_stack設定あり:
+    # プロジェクト/.claude/CLAUDE.md の tech_stack を参照
+    IF tech_stack == "frontend-web":
+        frontend-developer OR react-specialist/vue-expert
+    ELIF tech_stack == "backend-api":
+        backend-developer OR (python-pro/golang-pro/rust-pro)
+    ELIF tech_stack == "mobile-app":
+        mobile-developer OR ios-developer
+    ELSE:
+        fullstack-developer
+
+# 11. 複雑な実装（デフォルト）
+ELSE:
+    IF ファイル数 ≥ 3 OR ドメインロジック変更:
+        fullstack-developer OR backend-developer
+    ELSE:
+        自分で実装
+```
+
+**Agent起動時の必須パラメータ**:
+
+**共通パラメータ**:
+- description: "〜の実装/調査/修正/最適化" （5-10語）
+- model: "haiku" (探索・検証) OR "sonnet" (実装・リファクタリング・複雑なタスク)
+
+**prompt必須要素**:
+- 作業ディレクトリ: [プロジェクトルート絶対パス]
+- 期待する成果（agentタイプ別）:
+  - Explore: ファイルパス・行番号を含む検索結果
+  - 実装系: 実装完了 + テスト通過 + リンター0件
+  - debugger: 根本原因特定 + 修正案提示
+  - refactoring-specialist: リファクタリング完了 + 既存機能維持
+  - performance-engineer: ボトルネック特定 + 最適化実装 + ベンチマーク結果
+  - tdd-orchestrator: Red-Green-Refactorサイクル完了 + 全テスト通過
+- 失敗報告形式: "ERROR: [理由]" で開始
+- 実装ファイル: [変更対象ファイルリスト]（実装系agentのみ）
+
+**Agent完了時の検証フロー**:
+
+```python
+IF agent出力に "ERROR:" 含む:
+    作業停止 → ユーザー報告 → 再実行判断
+
+ELIF subagent_type == "Explore":
+    IF 出力に正規表現 `[^:]+:\d+` マッチあり:
+        成功 → 次タスク続行
+    ELSE:
+        Grep/Glob直接実行に切替
+
+ELSE:  # 実装系・最適化系agent
+    IF 期待ファイルが実在:
+        成功 → code-reviewer起動（実装の場合）
+    ELSE:
+        検証失敗 → ユーザー報告
+```
+
+**Agent報告の簡潔化**:
+- Agent完了時は結果を1-2文で要約し、次アクション明示
+- 例: "3ファイルでエラー検出。修正が必要なのは auth.ts のみ"
+- 報告が長文の場合は要点3つ以内に絞る
+
+**実装完了後の必須フロー**（順次実行）:
+```
+1. SlashCommand("/validate --layers=syntax,security --auto-fix")
+   # Layer 1-2: 構文・フォーマット自動修正（TypeScript, ESLint, Prettier）
+   # Layer 5: セキュリティ検証（.env変更, 認証情報スキャン, OWASP）
+   # IF 失敗 → エラー報告 → 修正要求 → SKIP 以下
+
+2. code-reviewer agent起動（PROACTIVE、全実装で必須）
+   # 設計、アーキテクチャ、ベストプラクティス評価
+   # validateで機械的検証済み → 主観的評価に集中
+
+3. IF code-reviewer が test coverage 不足を指摘:
+       test-automator agent起動
+```
+
+### 3. 品質確認（技術スタック別）
+
+#### コード品質基準
+
+**レビュー指摘の一貫性**:
+- 他者に指摘したルール・ガイドラインを自分の出力にも適用
+- ダブルスタンダード禁止
+
+**型安全言語（TypeScript, Rust, Go等）**:
 - 型安全性: any回避・strictモード有効化・型推論活用
 - コンパイルエラー・リンター警告: 0件必須
 - フォーマッター: 言語標準ツールで統一
 - エラーハンドリング: 型システム活用（Result<T>, Option<T>等、unwrap禁止）
 
-### 動的言語（JavaScript, Python, Ruby等）
+**動的言語（JavaScript, Python, Ruby等）**:
 - リンター・フォーマッター: 0件必須・統一整形
 - テストカバレッジ: 新機能の適切なカバレッジ
 
-### 全言語共通
+**全言語共通**:
 - 命名規則・コメント: プロジェクト内で一貫性確保
 - 依存関係: 不要な依存排除・脆弱性回避
 - 編集後フロー: フォーマッター → リンター → テスト
+- セキュリティ: OWASP対応・入力検証・出力エスケープ
+- テスト: 新機能カバレッジ・既存機能影響確認
 - 詳細: `~/.claude/stacks/{tech}.md`
+
+#### 5層品質ゲートシステム
+
+**多層検証による段階的品質保証**:
+1. **Layer 1-2 (syntax)**: 構文・フォーマット（自動修正可能）
+2. **Layer 3-4 (integration)**: テストカバレッジ、API型整合性
+3. **Layer 5 (security)**: セキュリティ（最重要）- .env検出、認証情報スキャン、OWASP
+
+**実行**: `/validate --layers=syntax,security --auto-fix`（実装完了後の必須フロー）
+**詳細**: `commands/validate.md`
+
+### 4. タスク完了・クリーンアップ
+
+**バックグラウンドプロセス自動停止**:
+
+```python
+IF タスク完了（以下のいずれか）:
+    - TodoWrite最終todo completed
+    - ユーザーが「完了」「done」「finish」明示
+THEN:
+    SlashCommand("/clean-jobs --auto")
+    # パターンベース自動分類:
+    #   - 開発サーバー・watchモード → 自動停止
+    #   - DB・Docker・ビルド → 継続実行
+    # 詳細: commands/clean-jobs.md
+```
+
+---
 
 ## セキュリティ基準
 
@@ -309,30 +353,9 @@ ELSE:
 
 ---
 
-## AI協働ツール最適化
+## Agentセキュリティ制約
 
-### ツール選択の優先順位
-
-**1. 探索・検索はTask tool（Explore agent）**
-- 複数ファイル横断検索
-- アーキテクチャ理解
-- 「どこで実装されているか」系の質問
-
-**2. 並列実行を最大化**
-- 独立タスク = 単一メッセージで複数ツール
-- 例: 複数Read、独立した検索、agent同時起動
-- 依存あり = 順次実行（Edit後Read、Write後Bash等）
-
-**3. 専用ツール優先**
-- ファイル操作: Read/Edit/Write（Bash cat/sed/echo禁止）
-- 検索: Grep/Glob（Bash find/grep禁止）
-- コード編集: Serena MCP（大規模変更時、トークン効率向上）
-
-**4. MCP活用**
-- IDE MCP: 診断情報（ESLint、TypeScript等）、コード実行
-- Serena MCP: シンボリック編集でファイル全体読み込み回避
-
-### エージェントメタデータ制約
+### エージェントメタデータによる安全性制御
 
 **フロントマターによる安全性制御**:
 
@@ -363,54 +386,6 @@ max_turns: 20
 2. `tools` リストから許可ツールを抽出
 3. `forbidden_paths` でパスアクセスを制限
 4. ツール実行時に制約を検証
-
----
-
-## CLI実装言語の自動選択
-
-### 言語選択の優先順位
-
-CLI実装時、以下の順で判断：
-
-**1. セキュリティリスクあり → Rust**
-- ユーザー入力処理（CLI引数、stdin等）
-- 外部データソース（API、ネットワーク通信）
-- 認証・暗号化・機密情報処理
-
-**2. データ処理・API連携 → Python**
-- CSV/JSON/YAML処理、データ集計
-- REST API クライアント
-- 統計計算、ログ解析、レポート生成
-
-**3. 高パフォーマンス必須 → Rust**
-- 大量データ（GB単位、数万件以上）
-- 並行処理、CPU集約的処理
-- バイナリ配布が必要
-
-**4. 軽量自動化 → Shell**
-- < 50行かつ外部入力なし
-- Git hooks、CI/CD、ビルドスクリプト
-
-**5. デフォルト → Python**
-- 上記に該当しない中規模スクリプト
-
-### 言語別実装ルール
-
-#### Shell
-- `set -euo pipefail` 必須
-- 変数は `"$var"` で引用
-- `eval` 禁止、外部入力を直接コマンドに渡さない
-- 詳細: `~/.claude/stacks/shell-cli.md`
-
-#### Python
-- 型ヒント使用（mypy推奨）
-- CLI: Click/Typer/argparse
-- エラーハンドリング徹底
-
-#### Rust
-- CLI: clap
-- Result型でエラーハンドリング
-- 詳細: `~/.claude/stacks/rust-cli.md`
 
 ---
 
@@ -487,6 +462,7 @@ CLAUDE.mdを編集する際は以下の原則を厳守：
 tech_stack: frontend-web  # 継承する技術スタック指定
 project_type: spa        # プロジェクト種別
 team_size: 3-5           # チーム規模
+development_methodology: tdd  # 開発手法（tdd / test-after）デフォルト: test-after
 ```
 
 ### 技術スタック別設定ファイル

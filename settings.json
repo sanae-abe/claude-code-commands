@@ -38,7 +38,7 @@
     "type": "command",
     "command": "~/.claude/statusline-command.sh"
   },
-  "alwaysThinkingEnabled": false,
+  "alwaysThinkingEnabled": true,
   "tool": {
     "Read": "approve",
     "Grep": "approve",

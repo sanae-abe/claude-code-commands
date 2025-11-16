@@ -1,23 +1,47 @@
 ---
 allowed-tools: Bash, AskUserQuestion
-argument-hint:
+argument-hint: "[--auto]"
 description: Safe cleanup of background jobs
 model: sonnet
 ---
 
 # Background Job Cleanup
 
-Arguments: None (interactive)
+Arguments: $ARGUMENTS
 
 Safely cleans up only background jobs created in the current Claude Code session.
 Does not affect other Claude Code sessions or separate terminal processes.
 
-## Execution Flow
+## Modes
 
+### Interactive Mode (default)
 1. Check background jobs in current session
 2. Present cleanup options via AskUserQuestion
 3. Execute based on user selection
 4. Verify and report results
+
+### Automatic Mode (--auto)
+For CLAUDE.md integration - automatically classify and kill cleanup_required jobs:
+1. Pattern-based classification (cleanup_required vs keep_running)
+2. Auto-kill cleanup_required jobs without confirmation
+3. Report results
+
+## Execution Flow
+
+**Parse arguments**:
+```bash
+AUTO_MODE=false
+for arg in $ARGUMENTS; do
+    case "$arg" in
+        --auto)
+            AUTO_MODE=true
+            ;;
+    esac
+done
+```
+
+**If --auto mode**: Execute automatic cleanup (see Automatic Mode section)
+**Else**: Execute interactive cleanup (see below)
 
 ## Tool Usage
 
@@ -217,6 +241,84 @@ Action: Exit without changes
 - Manual stop of processes started by development environment commands
 - Periodic job cleanup for memory conservation
 - Individual selection recommended when important tasks are running
+
+## Automatic Mode Implementation
+
+### Pattern-Based Classification
+
+**Cleanup Required Patterns** (auto-kill):
+```bash
+CLEANUP_PATTERNS=(
+    '^(npm|yarn|pnpm|bun)\s+run\s+(dev|start|watch|serve)'
+    '^(vite|next|webpack-dev-server|nodemon|cargo\s+watch)'
+    '^(jest|vitest|cargo\s+test).*--watch'
+    '^(live-server|http-server|python\s+-m\s+http\.server)'
+)
+```
+
+**Keep Running Patterns** (preserve):
+```bash
+KEEP_RUNNING_PATTERNS=(
+    '^(docker|kubectl|minikube)'
+    '^(postgres|mysql|redis-server|mongod)'
+    '(build|compile).*--release'
+    '^(npm|yarn|pnpm|bun)\s+run\s+build'
+)
+```
+
+### Auto Cleanup Logic
+
+```bash
+if [[ "$AUTO_MODE" == "true" ]]; then
+    # Get all job PIDs and commands
+    cleanup_pids=()
+
+    while IFS= read -r line; do
+        pid=$(echo "$line" | awk '{print $2}')
+        cmd=$(echo "$line" | sed 's/^[^]]*] *//')
+
+        # Check if cleanup_required
+        is_cleanup=false
+        for pattern in "${CLEANUP_PATTERNS[@]}"; do
+            if [[ "$cmd" =~ $pattern ]]; then
+                is_cleanup=true
+                break
+            fi
+        done
+
+        # Check if keep_running
+        is_keep=false
+        for pattern in "${KEEP_RUNNING_PATTERNS[@]}"; do
+            if [[ "$cmd" =~ $pattern ]]; then
+                is_keep=true
+                break
+            fi
+        done
+
+        # Add to cleanup list if cleanup_required and not keep_running
+        if [[ "$is_cleanup" == "true" ]] && [[ "$is_keep" == "false" ]]; then
+            cleanup_pids+=("$pid")
+        fi
+    done < <(jobs -l)
+
+    # Batch kill
+    if [[ ${#cleanup_pids[@]} -gt 0 ]]; then
+        if kill "${cleanup_pids[@]}" 2>/dev/null; then
+            echo "✓ Cleaned up ${#cleanup_pids[@]} background jobs"
+        else
+            killed_count=0
+            for pid in "${cleanup_pids[@]}"; do
+                kill "$pid" 2>/dev/null && ((killed_count++))
+            done
+            echo "✓ Cleaned up $killed_count background jobs"
+        fi
+    else
+        echo "No background jobs to clean up"
+    fi
+
+    exit 0
+fi
+```
 
 ## Session Isolation
 
