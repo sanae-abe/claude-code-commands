@@ -320,6 +320,16 @@ if [[ "$AUTO_MODE" == "true" ]]; then
 fi
 ```
 
+## Exit Code System
+
+```bash
+# 0: Success - Jobs cleaned up successfully
+# 1: User error - Invalid job numbers, no jobs to clean
+# 2: Security error - Input validation failed, suspicious input
+# 3: System error - Kill command failed, jobs command unavailable
+# 4: Unrecoverable error - Critical cleanup failure
+```
+
 ## Session Isolation
 
 This command only affects jobs in the current Claude Code session:

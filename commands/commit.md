@@ -198,3 +198,182 @@ Action: Report error "Conventional Commits format required: type(scope): subject
 ## Notes
 
 This command focuses on creating well-formatted Conventional Commits with emoji annotations. For automated quality checks, configure pre-commit hooks in your repository. The LLM can analyze changed files to suggest appropriate scope based on file patterns and directories.
+
+---
+
+## Security Implementation
+
+**MANDATORY: Execute these validations BEFORE ANY commit operation**
+
+```bash
+# 1. Validate Conventional Commit format
+validate_conventional_commit() {
+  local message="$1"
+
+  # Check format: type(scope): subject
+  if [[ ! "$message" =~ ^(feat|fix|refactor|docs|style|test|chore|perf)(\([a-z0-9_-]+\))?:\ .+ ]]; then
+    echo "ERROR: Invalid Conventional Commit format"
+    echo "Expected: type(scope): subject"
+    echo "Got: $message"
+    return 1
+  fi
+
+  # Check subject length (max 72 characters after type/scope)
+  local subject=$(echo "$message" | sed 's/^[^:]*: //')
+  if [[ ${#subject} -gt 72 ]]; then
+    echo "ERROR: Subject too long (${#subject} chars, max 72)"
+    return 1
+  fi
+
+  # Check subject doesn't end with period
+  if [[ "$subject" =~ \.$ ]]; then
+    echo "ERROR: Subject should not end with period"
+    return 1
+  fi
+
+  echo "✓ Conventional Commit format valid"
+  return 0
+}
+
+# 2. Handle pre-commit hook failures
+handle_pre_commit_hook() {
+  local hook_result="$1"
+
+  if [[ $hook_result -eq 0 ]]; then
+    echo "✓ Pre-commit hooks passed"
+    return 0
+  fi
+
+  # Detect hook failure type
+  echo "ERROR: Pre-commit hook failed (exit code: $hook_result)"
+
+  # Check for common hook failures
+  if git diff --cached --name-only | grep -q "\.ts$\|\.tsx$"; then
+    echo "Likely cause: TypeScript type errors"
+    echo "Fix: npm run type-check"
+  fi
+
+  if git diff --cached --name-only | grep -q "\.js$\|\.jsx$\|\.ts$\|\.tsx$"; then
+    echo "Likely cause: ESLint errors"
+    echo "Fix: npm run lint:fix"
+  fi
+
+  return $hook_result
+}
+
+# 3. Validate GPG signature (if enabled)
+validate_gpg_signature() {
+  # Check if commit signing is configured
+  local sign_commits=$(git config --get commit.gpgsign)
+
+  if [[ "$sign_commits" == "true" ]]; then
+    # Verify GPG key is available
+    if ! git config --get user.signingkey >/dev/null; then
+      echo "ERROR: GPG signing enabled but no signing key configured"
+      echo "Fix: git config user.signingkey YOUR_KEY_ID"
+      return 2
+    fi
+
+    echo "✓ GPG signature validation enabled"
+  fi
+
+  return 0
+}
+
+# 4. Safe argument parsing
+IFS=' ' read -r -a args <<< "$ARGUMENTS"
+COMMIT_MSG="${args[0]}"
+COMMIT_FLAGS=("${args[@]:1}")
+
+# Sanitize commit message (allow alphanumeric, spaces, common punctuation)
+if [[ -n "$COMMIT_MSG" ]]; then
+  # Detect injection attempts
+  if [[ "$COMMIT_MSG" =~ [\`\$\(] ]]; then
+    echo "ERROR: Dangerous characters detected in commit message"
+    exit 2
+  fi
+fi
+```
+
+## Exit Code System
+
+```bash
+# 0: Success - Commit created successfully
+# 1: User error - Invalid format, no staged files
+# 2: Security error - Dangerous characters, GPG key missing
+# 3: System error - Git command failed, hook execution error
+# 4: Unrecoverable error - Repository corruption
+```
+
+## Bash Syntax Examples
+
+```bash
+# Safe IFS usage for parsing commit message parts
+IFS=':' read -r type_scope subject <<< "$COMMIT_MSG"
+
+# Safe parameter expansion for commit components
+COMMIT_TYPE="${type_scope%%(*}"           # Extract type before (
+COMMIT_SCOPE="${type_scope#*(}"            # Extract after (
+COMMIT_SCOPE="${COMMIT_SCOPE%)*}"          # Remove trailing )
+
+# Exit code propagation with git commit
+git commit -m "$COMMIT_MSG" "${COMMIT_FLAGS[@]}"
+COMMIT_RESULT=$?
+if [[ $COMMIT_RESULT -ne 0 ]]; then
+  handle_pre_commit_hook $COMMIT_RESULT
+  exit $COMMIT_RESULT
+fi
+
+# Verify commit was created
+git log -1 --oneline
+```
+
+## Output Format Examples
+
+**Success example**:
+```
+✓ Commit created successfully
+✓ Format: Conventional Commits
+✓ Pre-commit hooks: PASSED
+✓ Signature: GPG signed
+
+Commit details:
+  Hash: a3f7b2c
+  Type: feat
+  Scope: ui
+  Subject: add user profile editor
+  Files: 3 modified, 128 insertions, 45 deletions
+
+Next steps:
+  1. Review commit: git show
+  2. Amend if needed: /commit --amend
+  3. Push changes: git push
+  4. Create PR: /ship
+```
+
+**Error example**:
+```
+ERROR: Pre-commit hook failed
+File: commit.md:handle_pre_commit_hook
+
+Reason: TypeScript type errors detected
+Got: 5 type errors in 2 files
+Hook exit code: 1
+
+Failed checks:
+  ✗ TypeScript compilation (5 errors)
+  ✗ ESLint (12 warnings)
+  ✓ Prettier formatting
+
+Affected files:
+  - src/components/UserProfile.tsx (3 errors)
+  - src/api/users.ts (2 errors)
+
+Suggestions:
+1. Fix type errors: npm run type-check
+2. Auto-fix ESLint: npm run lint:fix
+3. Skip hooks (NOT recommended): /commit --no-verify
+4. Review errors in detail: cat type-check-output.log
+```
+
+---

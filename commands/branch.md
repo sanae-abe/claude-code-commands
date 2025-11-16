@@ -214,6 +214,45 @@ AskUserQuestion: Required for interactive mode and uncommitted changes
 Bash: Required for git operations
 Read: Optional for reading description from file
 
+## Exit Code System
+
+```bash
+# 0: Success - Branch created and pushed successfully
+# 1: User error - Invalid branch type, invalid format
+# 2: Security error - Special characters detected, validation failure
+# 3: System error - Git command failed, network error
+# 4: Unrecoverable error - Critical git operation failure
+```
+
+## Output Format
+
+**Success example**:
+```
+✓ Branch created successfully
+✓ Name: feature/user-settings
+✓ Pushed to origin with upstream tracking
+
+Next steps:
+  1. Make changes to your code
+  2. Commit changes with /commit
+  3. Create PR/MR with /ship
+```
+
+**Error example**:
+```
+ERROR: Invalid branch type
+File: branch.md:validate_branch_type
+
+Reason: Branch type not in allowed list
+Got: "invalid"
+Allowed: feature, fix, refactor, docs, chore, hotfix
+
+Suggestions:
+1. Use /branch feature <description> for new features
+2. Use /branch fix <description> for bug fixes
+3. Use /branch without arguments for interactive mode
+```
+
 ## Examples
 
 Input: `/branch feature user-login`

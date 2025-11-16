@@ -364,6 +364,59 @@ Recommended workflow:
    → Quality check and refinement
 ```
 
+## Exit Code System
+
+```bash
+# 0: Success - Decision analysis completed with recommendation
+# 1: User error - Arguments missing, unclear question
+# 2: Security error - (Not applicable - read-only command)
+# 3: System error - decision-frameworks.md not found, Read tool failed
+# 4: Unrecoverable error - Framework analysis failed critically
+```
+
+## Output Format
+
+**Success example**:
+```
+## Conclusion: Zod is recommended
+
+Reason: ICE Score 18.2 (Highest priority). Superior type safety, better DX, seamless TypeScript integration.
+
+---
+
+## Detailed Analysis
+
+### ICE Score Evaluation
+| Option | Impact | Confidence | Ease | ICE Score |
+|--------|--------|------------|------|-----------|
+| Zod    | 8      | 90%        | 9    | 18.2      |
+| Yup    | 7      | 85%        | 8    | 15.9      |
+
+### Risk Assessment
+Security Risk: LOW - Both options provide adequate validation
+Technical Risk: LOW - Well-documented migration path
+Development Efficiency Risk: LOW - Zod reduces boilerplate
+
+### Final Recommendation
+1. Implement Zod validation schemas
+2. Migrate existing Yup schemas incrementally
+3. Monitor bundle size impact
+```
+
+**Error example**:
+```
+ERROR: decision-frameworks.md not found
+File: decide.md:load_frameworks
+
+Reason: Required reference document missing
+Got: File not found at ~/.claude/docs/decision-frameworks.md
+
+Suggestions:
+1. Check symbolic link: ls -la ~/.claude/docs/decision-frameworks.md
+2. Verify source file exists
+3. Recreate symlink if needed
+```
+
 ## Examples
 
 Input: /decide "Data validation library choice. Zod vs Yup?"

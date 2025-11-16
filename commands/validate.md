@@ -46,12 +46,18 @@ for arg in "${args[@]}"; do
     esac
 done
 
-# Verify pipeline exists
-PIPELINE_PATH="$HOME/projects/claude-code-workspace/validation/pipeline.sh"
-if [[ ! -x "$PIPELINE_PATH" ]]; then
-    echo "Error: Quality gate pipeline not found at $PIPELINE_PATH"
-    exit 1
-fi
+# SECURITY: Validate inputs (see Security Implementation section)
+validate_layers "$LAYERS"
+validate_auto_fix "$AUTO_FIX"
+
+# SECURITY: Resolve paths safely (see Security Implementation section)
+resolve_paths
+# This sets: WORKSPACE_ROOT, PIPELINE_PATH, REPORT_GENERATOR
+
+# SECURITY: Create secure temp file and verify python3 (see Security Implementation section)
+create_secure_temp
+check_python3
+# This sets: REPORT_FILE with auto-cleanup trap
 
 # Run quality gate pipeline
 echo "🔍 Running quality gate validation..."
@@ -66,94 +72,134 @@ else
 fi
 
 # Display report
-REPORT_FILE="/tmp/quality-gate-report.json"
-REPORT_GENERATOR="$HOME/projects/claude-code-workspace/validation/utils/report-generator.py"
-
-if [[ -f "$REPORT_FILE" ]] && [[ -f "$REPORT_GENERATOR" ]]; then
+if [[ -f "$REPORT_FILE" ]]; then
     if [[ "$REPORT_FORMAT" == "json" ]]; then
         python3 "$REPORT_GENERATOR" "$REPORT_FILE" --format=json
     else
         python3 "$REPORT_GENERATOR" "$REPORT_FILE"
     fi
 else
-    if [[ ! -f "$REPORT_FILE" ]]; then
-        echo "⚠️  Report generation failed: Report file not found"
-    fi
-    if [[ ! -f "$REPORT_GENERATOR" ]]; then
-        echo "⚠️  Report generation failed: Generator script not found"
-    fi
+    echo "⚠️  Report generation failed: Report file not found"
 fi
 
+# Temp file cleanup handled automatically by trap
 exit $VALIDATION_RESULT
 ```
 
-## User Guidance
+## Output Format
 
-If validation fails:
-1. Show specific errors with file:line references
-2. Suggest fixes (manual or --auto-fix)
-3. Link to relevant documentation
+Use this structure with emojis for clarity:
 
-Example output:
 ```
-❌ Quality Gate Report
+❌/✅ Quality Gate Report
 ════════════════════════════════════════
-
-❌ Layer 2: Format Validation - FAILED
-  Errors:
-    tasks.yml:5 - Markdown code block detected
-
-  Suggestions:
+❌/✅ Layer N: Name - FAILED/PASSED
+  Errors: (if failed)
+    file:line - description
+  Suggestions: (if fixable)
     Run with --auto-fix: /validate --auto-fix
-    Or manually remove ```yaml blocks
-
-✅ Layer 5: Security Validation - PASSED
-  No security issues detected
-
+    Or manually fix the reported issues
 ════════════════════════════════════════
-Total Gates: 5
-Passed: 4
-Failed: 1
+Total Gates: X | Passed: Y | Failed: Z
 
 💡 Fix errors and re-run validation
 ```
 
-## Security Considerations
+- Show errors with file:line references
+- Suggest --auto-fix for fixable errors
+- Display summary counts
 
-- Pipeline script validates all input arguments
-- No user input passed directly to shell commands
-- All file paths validated before execution
-- Reports generated in secure temporary location
+## Security Implementation
 
-## Performance Optimization
+**MANDATORY: Execute these validations BEFORE ANY pipeline execution**
 
-- Parallel gate execution (future enhancement)
-- npm audit caching (future enhancement)
-- Early exit on critical failures (--stop-on-failure)
+```bash
+# 1. Validate layers argument
+validate_layers() {
+  local layers="$1"
+  IFS=',' read -ra layer_array <<< "$layers"
+
+  for layer in "${layer_array[@]}"; do
+    case "$layer" in
+      all|syntax|security|integration) ;;
+      *)
+        echo "ERROR: Invalid layer '$layer'"
+        echo "Allowed: all, syntax, security, integration (comma-separated)"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# 2. Validate auto-fix argument
+validate_auto_fix() {
+  local auto_fix="$1"
+  if [[ "$auto_fix" != "true" && "$auto_fix" != "false" ]]; then
+    echo "ERROR: Invalid auto-fix value '$auto_fix'"
+    echo "Allowed: true or false"
+    exit 1
+  fi
+}
+
+# 3. Resolve paths safely
+resolve_paths() {
+  WORKSPACE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  if [[ -z "$WORKSPACE_ROOT" ]]; then
+    if [[ -d "$HOME/.claude/validation" ]]; then
+      WORKSPACE_ROOT="$HOME/.claude"
+    else
+      echo "ERROR: Not in git repo and ~/.claude/validation not found"
+      exit 1
+    fi
+  fi
+
+  PIPELINE_PATH="${WORKSPACE_ROOT}/validation/pipeline.sh"
+  REPORT_GENERATOR="${WORKSPACE_ROOT}/validation/utils/report-generator.py"
+
+  if [[ ! -x "$PIPELINE_PATH" ]]; then
+    echo "ERROR: Pipeline not found or not executable: $PIPELINE_PATH"
+    exit 1
+  fi
+
+  if [[ ! -f "$REPORT_GENERATOR" ]]; then
+    echo "ERROR: Report generator not found: $REPORT_GENERATOR"
+    exit 1
+  fi
+}
+
+# 4. Create secure temp file
+create_secure_temp() {
+  # Use system default secure location (not /tmp)
+  REPORT_FILE=$(mktemp)
+  trap "rm -f '$REPORT_FILE'" EXIT
+}
+
+# 5. Verify python3 availability
+check_python3() {
+  if ! command -v python3 &> /dev/null; then
+    echo "ERROR: python3 not found. Please install Python 3.6+"
+    exit 1
+  fi
+}
+```
+
+**Execution order**:
+1. validate_layers "$LAYERS"
+2. validate_auto_fix "$AUTO_FIX"
+3. resolve_paths
+4. create_secure_temp
+5. check_python3
+6. Execute pipeline.sh with validated arguments
+
+## Performance Notes
+
+- Early exit on failures (--stop-on-failure=true)
 
 ## Examples
 
-**Basic validation**:
-```
-/validate
-```
-
-**Security-only check**:
-```
-/validate --layers=security
-```
-
-**Syntax check with auto-fix**:
-```
-/validate --layers=syntax --auto-fix
-```
-
-**Full validation with JSON output**:
-```
-/validate --layers=all --report=json
-```
-
-**Multiple layers**:
-```
-/validate --layers=syntax,security --auto-fix
+```bash
+/validate  # Basic (all layers)
+/validate --layers=security --auto-fix  # Security with auto-fix
+/validate --layers=syntax,security --report=json  # Multiple layers, JSON output
 ```

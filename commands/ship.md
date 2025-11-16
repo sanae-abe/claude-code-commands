@@ -395,6 +395,86 @@ glab mr update <MR-number> --ready
 glab mr update <MR-number> --draft
 ```
 
+## Exit Code System
+
+```bash
+# 0: Success - PR/MR created successfully
+# 1: User error - Invalid arguments, Conventional Commits format error
+# 2: Security error - Branch name validation failed
+# 3: System error - CLI tool not found, git push failed
+# 4: Unrecoverable error - Platform detection failed, critical error
+```
+
+## Output Format
+
+**Success example**:
+```
+✓ Pull Request created successfully
+✓ Platform: GitHub
+✓ Branch: feature/user-profile-edit
+✓ Status: Draft
+✓ URL: https://github.com/org/repo/pull/123
+
+Quality Checks:
+  ✓ TypeScript: 0 errors
+  ✓ ESLint: 0 errors
+  ✓ Tests: All passed
+
+Next steps:
+  1. Review PR checklist
+  2. Request reviews when ready
+  3. Mark as ready: gh pr ready 123
+```
+
+**Error example**:
+```
+ERROR: Conventional Commits format invalid
+File: ship.md:validate_commit_format
+
+Reason: PR title does not follow Conventional Commits format
+Got: "Add user profile feature"
+Expected: "feat(profile): add user profile editing feature"
+
+Suggestions:
+1. Use format: <type>(<scope>): <subject>
+2. Valid types: feat, fix, refactor, docs, chore, hotfix
+3. Example: feat(ui): add dark mode toggle
+```
+
+## Bash Syntax Examples
+
+```bash
+# Safe branch name extraction
+CURRENT_BRANCH=$(git branch --show-current)
+BRANCH_TYPE="${CURRENT_BRANCH%%/*}"
+BRANCH_DESC="${CURRENT_BRANCH#*/}"
+
+# Safe platform detection
+REMOTE_URL=$(git remote get-url origin 2>/dev/null)
+case "$REMOTE_URL" in
+  *github.com*)
+    PLATFORM="github"
+    CLI_CMD="gh"
+    ;;
+  *gitlab*)
+    PLATFORM="gitlab"
+    CLI_CMD="glab"
+    ;;
+  *)
+    echo "ERROR: Unsupported platform"
+    exit 2
+    ;;
+esac
+
+# Safe PR/MR creation with heredoc
+if [[ "$PLATFORM" == "github" ]]; then
+  gh pr create --draft --title "$TITLE" --body "$(cat <<'EOF'
+$TEMPLATE_CONTENT
+EOF
+)"
+fi
+```
+
 ## Error Handling
 
 ### Argument validation errors

@@ -286,6 +286,50 @@ Action: Use AskUserQuestion to collect task description, then execute with defau
 Input: /plan-review "Large feature" --perspectives=invalid
 Action: Report error: "Invalid perspective. Allowed: security, performance, maintainability, accessibility, testing, documentation" and exit
 
+## Exit Code System
+
+```bash
+# 0: Success - Plan created, reviewed, tasks.yml updated
+# 1: User error - Task name missing, invalid arguments
+# 2: Security error - YAML injection detected, path traversal
+# 3: System error - /iterative-review failed, PyYAML not available
+# 4: Unrecoverable error - tasks.yml corruption, critical failure
+```
+
+## Output Format
+
+**Success example**:
+```
+✓ Implementation plan created and reviewed
+✓ Tasks added to tasks.yml: 3 new tasks
+✓ Review completed: 2 rounds
+
+Plan Summary:
+  - Total tasks: 3
+  - Critical issues: 0
+  - Important issues: 2
+  - Total effort: 10h
+
+Next steps:
+  1. Review tasks.yml
+  2. Run /todo sync
+  3. Start with /implement task-1
+```
+
+**Error example**:
+```
+ERROR: YAML sanitization failed
+File: plan-review.md:sanitize_yaml_string
+
+Reason: Invalid characters detected in task data
+Got: Task description contains YAML anchor/alias characters
+
+Suggestions:
+1. Remove special YAML characters: !!, &, *, |, >
+2. Use plain text descriptions only
+3. Check task name for control characters
+```
+
 ## Integration with /implement and /todo
 
 After /plan-review completion:

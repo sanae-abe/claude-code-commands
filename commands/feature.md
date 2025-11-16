@@ -121,6 +121,51 @@ Never expose absolute file paths in error messages
 Never expose stack traces or internal details
 Report only user-actionable information
 
+## Exit Code System
+
+```bash
+# 0: Success - Feature implementation plan created successfully
+# 1: User error - Invalid feature name, arguments missing
+# 2: Security error - Validation failure, special characters detected
+# 3: System error - AskUserQuestion failed, TodoWrite creation failed
+# 4: Unrecoverable error - Critical planning failure
+```
+
+## Output Format
+
+**Success example**:
+```
+✓ Feature implementation plan created
+✓ Type: ui-component
+✓ Complexity: moderate
+✓ Estimated effort: 4-6 hours
+
+Implementation Steps:
+  1. Analyze requirements and existing code
+  2. Implement core functionality
+  3. Add tests and documentation
+  4. Run quality validation
+
+Next steps:
+  1. Review implementation plan
+  2. Start with /implement or manual implementation
+  3. Run /validate after completion
+```
+
+**Error example**:
+```
+ERROR: Invalid feature name detected
+File: feature.md:validate_arguments
+
+Reason: Feature name contains special characters
+Got: "user-profile; rm -rf /"
+
+Suggestions:
+1. Use only: letters, numbers, spaces, hyphens, underscores
+2. Max 100 characters
+3. Example: "user profile editing feature"
+```
+
 ## Examples
 
 Input: /feature "user profile editing"

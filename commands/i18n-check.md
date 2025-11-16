@@ -496,6 +496,50 @@ Arguments: $ARGUMENTS
 
 Parse arguments to identify check scope and target languages, auto-detect project i18n structure.
 
+## Exit Code System
+
+```bash
+# 0: Success - i18n check completed, report generated
+# 1: User error - Invalid language code, no translation files found
+# 2: Security error - Path traversal detected, validation failure
+# 3: System error - JSON parsing failed, jq not available
+# 4: Unrecoverable error - Critical i18n structure corruption
+```
+
+## Output Format Examples
+
+**Success example**:
+```
+✓ i18n check completed
+✓ Languages analyzed: 4 (en, ja, zh-CN, zh-TW)
+✓ Translation coverage: 98% average
+
+Key Findings:
+  - Missing translations: 9 keys in zh-CN, zh-TW
+  - Terminology consistency: 3 issues in Japanese
+  - Technical quality: PASSED
+
+Next steps:
+  1. Complete missing translations
+  2. Standardize terminology
+  3. Update README.zh-CN.md
+```
+
+**Error example**:
+```
+ERROR: Invalid language code format
+File: i18n-check.md:validate_language_code
+
+Reason: Language code does not follow ISO 639-1 or BCP 47 format
+Got: "xyz-123"
+Expected: "en", "ja", "zh-CN", "zh-TW"
+
+Suggestions:
+1. Use 2-letter ISO 639-1 codes (en, ja)
+2. Or BCP 47 format for regions (zh-CN, zh-TW)
+3. Use --help to list supported language codes
+```
+
 ## i18n Check Execution
 
 Analyze current project i18n structure and launch appropriate specialized agents for comprehensive i18n check.

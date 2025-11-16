@@ -11,9 +11,12 @@ Arguments: $ARGUMENTS
 
 ## Execution Flow
 
+**Common flow for ALL subcommands**:
 1. Parse subcommand and arguments from $ARGUMENTS
-2. Execute worktree operation based on subcommand
-3. Provide user-actionable output
+2. **SECURITY: Validate inputs** (call validate_branch_name, validate_worktree_path)
+3. Check preconditions (git status, existing worktrees, etc.)
+4. Execute git operation with proper quoting (see Security Implementation)
+5. Verify result and provide user-actionable output
 
 ## Subcommands
 
@@ -21,12 +24,12 @@ Arguments: $ARGUMENTS
 
 Create new worktree for parallel development:
 
-1. Validate branch name (no spaces, special chars except `-_/`)
-2. Determine base branch (default: current branch or main)
-3. Calculate worktree path: `../worktree-<branch-name>`
-4. Create new branch and worktree:
+1. Validate branch name (call validate_branch_name)
+2. Validate worktree path (call validate_worktree_path)
+3. Determine base branch (default: current branch or main)
+4. Create new branch and worktree with proper quoting:
    ```bash
-   git worktree add -b <branch-name> ../worktree-<branch-name> <base-branch>
+   git worktree add -b "${BRANCH}" "../worktree-${BRANCH}" "${BASE_BRANCH}"
    ```
 5. Output worktree path and next steps
 
@@ -81,8 +84,8 @@ Merge worktree branch to main and cleanup:
 
 **Cleanup steps** (unless --no-delete):
 ```bash
-git worktree remove ../worktree-<branch-name>
-git branch -d <branch-name>
+git worktree remove "../worktree-${BRANCH}"
+git branch -d "${BRANCH}"
 ```
 
 ### delete <branch-name> [--force]
@@ -120,28 +123,70 @@ Show comprehensive worktree status:
 - Merge conflicts require user decision
 - Ambiguous arguments (multiple matches)
 
-## Security Considerations
+## Security Implementation
 
-**Input validation**:
-- Branch names: `^[a-zA-Z0-9/_-]+$` (no spaces, special chars)
-- Paths: Must be within parent directory of current repo
-- No command injection via branch names in git commands
+**MANDATORY: Execute these validations BEFORE ANY git command**
 
-**Safe command construction**:
 ```bash
-# BAD: direct interpolation
-git worktree add ../worktree-$BRANCH
+validate_branch_name() {
+  local branch_name="$1"
 
-# GOOD: validated and quoted
-if [[ "$BRANCH" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
-  git worktree add "../worktree-${BRANCH}"
-fi
+  # Check allowed characters
+  if [[ ! "$branch_name" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
+    echo "ERROR: Invalid branch name. Use only: a-z A-Z 0-9 / _ -"
+    exit 1
+  fi
+
+  # Prevent directory traversal
+  if [[ "$branch_name" =~ \.\. ]]; then
+    echo "ERROR: '..' not allowed in branch names"
+    exit 1
+  fi
+
+  # Prevent branch names starting with dash (option injection)
+  if [[ "$branch_name" =~ ^- ]]; then
+    echo "ERROR: Branch names cannot start with '-'"
+    exit 1
+  fi
+}
+
+validate_worktree_path() {
+  local branch_name="$1"
+  local repo_parent
+
+  # Get repository root
+  repo_parent=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [[ -z "$repo_parent" ]]; then
+    echo "ERROR: Not a git repository"
+    exit 1
+  fi
+
+  # Worktree must be in parent directory of repo
+  repo_parent=$(dirname "$repo_parent")
+  local worktree_path="${repo_parent}/worktree-${branch_name}"
+
+  # Verify path is directly under repo parent (no subdirectories)
+  if [[ "$(dirname "$worktree_path")" != "$repo_parent" ]]; then
+    echo "ERROR: Worktree must be in repository parent directory"
+    exit 1
+  fi
+
+  # Reject symbolic links
+  if [[ -e "$worktree_path" && -L "$worktree_path" ]]; then
+    echo "ERROR: Worktree path cannot be a symbolic link"
+    exit 1
+  fi
+}
 ```
 
-**Path validation**:
-- Worktree paths must be absolute or relative to repo root
-- Prevent directory traversal: reject `..` in branch names
-- Verify worktree path before removal operations
+**Safe git command execution**:
+```bash
+# After validation, always use proper quoting
+git worktree add -b "${BRANCH}" "../worktree-${BRANCH}" "${BASE_BRANCH}"
+
+# NEVER use unquoted variables:
+# ❌ git worktree add -b $BRANCH ../worktree-$BRANCH $BASE_BRANCH
+```
 
 ## Error Handling
 
@@ -166,83 +211,45 @@ Suggestions:
 3. Delete existing: /worktree delete feature-auth
 ```
 
-## Workflow Integration
+## Best Practices
 
-**Parallel development pattern**:
-```bash
-# Main development in main worktree
-/worktree create feature-payments
-# -> cd ../worktree-feature-payments to work on feature
+- **Main worktree**: Keep for stable/release code
+- **Feature worktrees**: Create for features, bugfixes, experiments
+- **Merge frequently**: Avoid long-running divergent branches
+- **Clean up promptly**: Remove completed worktrees to reduce clutter
 
-# Simultaneously work on bugfix
-/worktree create bugfix-login
-# -> cd ../worktree-bugfix-login to work on bugfix
+For parallel development workflow integration, see CLAUDE.md.
 
-# Merge when ready
-/worktree merge feature-payments  # Auto-cleanup
-/worktree merge bugfix-login
+## Output Format Examples
+
+**Success example**:
 ```
-
-**Best practices**:
-- Keep main worktree for stable/release code
-- Create worktrees for features, bugfixes, experiments
-- Merge frequently to avoid divergence
-- Clean up completed worktrees promptly
-
-## Examples
-
-**Create feature worktree**:
-```
-/worktree create feature-websocket
-
-Output:
-✓ Created worktree: ../worktree-feature-websocket
-✓ Branch: feature-websocket (from main)
+✓ Created worktree: ../worktree-feature-name
+✓ Branch: feature-name (from main)
 
 Next steps:
-  cd ../worktree-feature-websocket
+  cd ../worktree-feature-name
   # Start development
 ```
 
-**List all worktrees**:
+**Error example**:
 ```
-/worktree list
+ERROR: Branch 'feature-name' already exists
 
-Output:
-BRANCH              PATH                                STATUS
-main                /Users/.../claude-code-workspace    (main)
-feature-websocket   /Users/.../worktree-feature-websocket
-```
-
-**Merge and cleanup**:
-```
-/worktree merge feature-websocket
-
-Output:
-✓ Switched to main
-✓ Merged feature-websocket
-✓ Pushed to origin/main
-✓ Removed worktree
-✓ Deleted branch feature-websocket
+Suggestions:
+1. Switch to existing: /worktree switch feature-name
+2. Use different name: /worktree create feature-name-v2
+3. Delete existing: /worktree delete feature-name
 ```
 
-## Performance Optimization
+## Performance Notes
 
-**Parallel execution**:
-- List operation: single `git worktree list` call
-- Status check: parallel `git status` for each worktree (if > 3 worktrees)
+- Use parallel execution when checking status of multiple worktrees
+- Minimize git command calls where possible
 
-**Caching**:
-- Cache worktree list for 5 seconds to avoid repeated git calls
-- Invalidate cache on create/delete operations
+## Argument Parsing
 
-## Default Behavior
-
-When no arguments provided:
-1. Show `list` output
-2. Display usage hint with common subcommands
-
-**Argument parsing**:
 - First argument: subcommand (create, list, switch, merge, delete, status)
 - Remaining arguments: subcommand-specific
 - Flags: `--force`, `--detailed`, `--from`, `--no-delete`
+- **No arguments**: Show `list` output and usage hint

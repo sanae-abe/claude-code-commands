@@ -413,6 +413,51 @@ Usage: /implement <task-id>
 - Dependencies checked before starting
 - Acceptance criteria guide implementation
 
+## Exit Code System
+
+```bash
+# 0: Success - Task implemented successfully, status updated
+# 1: User error - Invalid task ID, task not found
+# 2: Security error - (Minimal risk - YAML validation only)
+# 3: System error - tasks.yml parsing failed, Python unavailable
+# 4: Unrecoverable error - Dependency not met, critical failure
+```
+
+## Output Format
+
+**Success example**:
+```
+✓ Task implementation completed
+✓ Task: task-1 (Implement user authentication system)
+✓ Documents loaded: 3 references
+✓ Acceptance criteria: All 5 met
+✓ Status updated: pending → completed
+
+Implementation Summary:
+  - Files modified: 8
+  - Tests added: 12
+  - Documentation updated: README.md, API-SPEC.md
+
+Next steps:
+  1. Run /validate --layers=all
+  2. Create commit with /commit
+  3. Continue with /implement task-2
+```
+
+**Error example**:
+```
+ERROR: Dependency not completed
+File: implement.md:check_dependencies
+
+Reason: Required dependency task not yet completed
+Got: task-1 depends on task-0 (status: pending)
+
+Suggestions:
+1. Complete task-0 first: /implement task-0
+2. Check task dependencies in tasks.yml
+3. Adjust task order if needed
+```
+
 ## Configuration
 
 Optional: Create .claude/implement.json for project-specific settings:
