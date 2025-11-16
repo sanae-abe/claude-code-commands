@@ -622,3 +622,279 @@ const html = marked(markdown);
 const clean = DOMPurify.sanitize(html);
 <div dangerouslySetInnerHTML={{ __html: clean }} />
 ```
+
+## Performance Optimization Patterns
+
+### React Runtime Performance
+
+**Memoization strategies**:
+
+```typescript
+// 1. React.memo for component-level memoization
+const TaskCard = memo<TaskCardProps>(({ task, onUpdate }) => {
+  return <Card>{task.title}</Card>
+});
+
+// 2. useMemo for expensive calculations
+const memoizedValue = useMemo(() => {
+  return expensiveCalculation(data);
+}, [data]);
+
+// 3. useCallback for stable function references
+const memoizedCallback = useCallback(() => {
+  handleClick(id);
+}, [id]);
+
+// 4. State optimization with useReducer
+const [state, dispatch] = useReducer(reducer, initialState);
+// Better than multiple useState for complex state
+```
+
+**Virtualization for large lists**:
+
+```tsx
+import { FixedSizeList } from 'react-window';
+
+// Render only visible items (10,000 items → 10 rendered)
+<FixedSizeList
+  height={600}
+  itemCount={10000}
+  itemSize={50}
+  width="100%">
+  {({ index, style }) => (
+    <div style={style}>Item {index}</div>
+  )}
+</FixedSizeList>
+```
+
+**Code splitting strategies**:
+
+```tsx
+// Route-based splitting
+const Dashboard = lazy(() => import('./Dashboard'));
+const Settings = lazy(() => import('./Settings'));
+
+// Component-based splitting (heavy components)
+const Chart = lazy(() => import('./Chart'));
+
+// Vendor bundle separation (webpack/vite config)
+// splitChunks: { chunks: 'all', cacheGroups: { vendor: ... } }
+```
+
+### Bundle Optimization Strategies
+
+**Tree shaking enablement**:
+
+```typescript
+// Bad: Wildcard imports prevent tree shaking
+import * as utils from './utils';
+
+// Good: Named imports enable tree shaking
+import { formatDate, parseDate } from './utils';
+
+// Mark packages as side-effect free (package.json)
+{
+  "sideEffects": false,
+  // or specify files with side effects
+  "sideEffects": ["*.css", "*.scss"]
+}
+```
+
+**Dynamic imports for code splitting**:
+
+```tsx
+// Route-based
+const routes = [
+  { path: '/', component: lazy(() => import('./Home')) },
+  { path: '/about', component: lazy(() => import('./About')) },
+];
+
+// Feature-based
+if (user.isPremium) {
+  const PremiumFeature = await import('./PremiumFeature');
+  render(<PremiumFeature.default />);
+}
+```
+
+**Asset optimization**:
+
+```javascript
+// Image compression (vite.config.ts / webpack.config.js)
+import imagemin from 'vite-plugin-imagemin';
+
+export default {
+  plugins: [
+    imagemin({
+      gifsicle: { optimizationLevel: 3 },
+      mozjpeg: { quality: 80 },
+      pngquant: { quality: [0.65, 0.8] },
+      svgo: { plugins: [{ removeViewBox: false }] },
+    }),
+  ],
+};
+
+// Font subsetting (only include used characters)
+pyftsubset font.ttf \
+  --output-file=font-subset.woff2 \
+  --flavor=woff2 \
+  --unicodes=U+0020-007E  # Basic Latin
+
+// CSS purging (remove unused styles)
+// Tailwind CSS: automatic in production build
+// PurgeCSS: configure in postcss.config.js
+```
+
+### Memory Optimization
+
+**Prevent memory leaks**:
+
+```tsx
+useEffect(() => {
+  // Event listeners: always cleanup
+  const handler = () => console.log('resize');
+  window.addEventListener('resize', handler);
+  return () => window.removeEventListener('resize', handler);
+}, []);
+
+useEffect(() => {
+  // Subscriptions: cleanup required
+  const subscription = observable.subscribe();
+  return () => subscription.unsubscribe();
+}, []);
+
+useEffect(() => {
+  // Timers: clear on unmount
+  const timer = setInterval(() => {}, 1000);
+  return () => clearInterval(timer);
+}, []);
+
+useEffect(() => {
+  // Async operations: cancel if component unmounts
+  let cancelled = false;
+
+  fetchData().then(data => {
+    if (!cancelled) setState(data);
+  });
+
+  return () => { cancelled = true; };
+}, []);
+```
+
+**Efficient data structures**:
+
+```typescript
+// WeakMap for objects (automatic garbage collection)
+const cache = new WeakMap<object, CachedData>();
+cache.set(obj, data);  // obj GC → data also GC
+
+// WeakSet for object presence checking
+const visited = new WeakSet<Node>();
+visited.add(node);
+
+// Object pooling for frequent allocations
+class ObjectPool<T> {
+  private pool: T[] = [];
+
+  acquire(factory: () => T): T {
+    return this.pool.pop() || factory();
+  }
+
+  release(obj: T): void {
+    this.pool.push(obj);
+  }
+}
+```
+
+### Network Optimization
+
+**Request deduplication and caching**:
+
+```tsx
+// TanStack Query: automatic deduplication
+import { useQuery } from '@tanstack/react-query';
+
+const { data } = useQuery({
+  queryKey: ['user', id],
+  queryFn: () => fetchUser(id),
+  staleTime: 5 * 60 * 1000,  // 5 minutes
+  cacheTime: 10 * 60 * 1000, // 10 minutes
+});
+
+// SWR: similar deduplication
+import useSWR from 'swr';
+const { data } = useSWR(`/api/user/${id}`, fetcher);
+```
+
+**Lazy loading and progressive loading**:
+
+```tsx
+// Image lazy loading (native)
+<img src="image.jpg" loading="lazy" />
+
+// Component lazy loading
+const HeavyComponent = lazy(() => import('./Heavy'));
+
+// Progressive image loading (LQIP - Low Quality Image Placeholder)
+<Image
+  src="high-res.jpg"
+  placeholder="blur"
+  blurDataURL="data:image/jpeg;base64,..."
+/>
+```
+
+**API call batching**:
+
+```typescript
+// GraphQL: batch multiple queries
+const [user, posts] = await Promise.all([
+  client.query({ query: GET_USER }),
+  client.query({ query: GET_POSTS }),
+]);
+
+// REST: implement batching endpoint
+const ids = [1, 2, 3, 4, 5];
+const users = await fetch(`/api/users?ids=${ids.join(',')}`);
+```
+
+### Performance Testing and Monitoring
+
+**Measurement tools**:
+
+```bash
+# Build analysis
+npm run build
+npx vite-bundle-visualizer  # or webpack-bundle-analyzer
+
+# Lighthouse CI (performance regression detection)
+npm install -g @lhci/cli
+lhci autorun --config=lighthouserc.json
+
+# Core Web Vitals (production)
+# web-vitals library
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
+
+getCLS(console.log);
+getLCP(console.log);
+// Send to analytics endpoint
+```
+
+**Performance budgets**:
+
+```json
+// budgets.json (Lighthouse CI)
+[
+  {
+    "path": "/*",
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 250 },
+      { "resourceType": "stylesheet", "budget": 50 },
+      { "resourceType": "total", "budget": 400 }
+    ],
+    "timings": [
+      { "metric": "first-contentful-paint", "budget": 1500 },
+      { "metric": "largest-contentful-paint", "budget": 2500 },
+      { "metric": "interactive", "budget": 3500 }
+    ]
+  }
+]
+```

@@ -25,16 +25,119 @@ Examples:
 - Recent translations: !`git log --oneline --since="1 week ago" -- "**/locales/**" "**/i18n/**" | head -3 || echo "No recent updates"`
 - Git status: !`git status --porcelain | grep -E "(locales|i18n|lang)" | wc -l || echo "0"` uncommitted translation changes
 
+## Exit Code Constants
+
+```bash
+# Exit code definitions (single source of truth)
+readonly EXIT_SUCCESS=0
+readonly EXIT_USER_ERROR=1
+readonly EXIT_SECURITY_ERROR=2
+readonly EXIT_SYSTEM_ERROR=3
+readonly EXIT_UNRECOVERABLE=4
+```
+
 ## Execution Flow
 
 ### 1. Argument Validation
+
+#### Argument Parsing Implementation
+
+```bash
+# Parse $ARGUMENTS into structured variables
+LANG_CODE=""
+CHECK_SCOPE=""
+
+# IFS-based argument splitting
+IFS=' ' read -r -a args <<< "$ARGUMENTS"
+
+# Parameter expansion patterns
+for arg in "${args[@]}"; do
+    case "$arg" in
+        --coverage|--consistency|--format|--cultural|--complete)
+            CHECK_SCOPE="$arg"
+            ;;
+        *)
+            if [[ -z "$LANG_CODE" ]]; then
+                LANG_CODE="$arg"
+            fi
+            ;;
+    esac
+done
+
+# Extract flag value using parameter expansion
+FLAG_VALUE="${CHECK_SCOPE#--}"  # --coverage → coverage
+```
+
+#### Validation Functions
+
+```bash
+validate_language_code() {
+    local code="$1"
+
+    # ISO 639-1 (2-letter) or BCP 47 (language-region) validation
+    if [[ ! "$code" =~ ^[a-z]{2}(-[A-Z]{2})?$ ]]; then
+        echo "ERROR: Invalid language code format"
+        echo "File: i18n-check.md:validate_language_code - Language Code Validation"
+        echo ""
+        echo "Got: '$code'"
+        echo "Expected: ISO 639-1 format (e.g., 'en', 'ja') or BCP 47 (e.g., 'zh-CN')"
+        return $EXIT_USER_ERROR
+    fi
+
+    return $EXIT_SUCCESS
+}
+
+validate_flag() {
+    local flag="$1"
+    local allowed="--coverage --consistency --format --cultural --complete"
+
+    if [[ ! " $allowed " =~ " $flag " ]]; then
+        echo "ERROR: Invalid flag: $flag"
+        echo "File: i18n-check.md:validate_flag - Flag Validation"
+        echo ""
+        echo "Allowed flags: --coverage, --consistency, --format, --cultural, --complete"
+        echo "Example: /i18n-check --coverage"
+        return $EXIT_USER_ERROR
+    fi
+
+    return $EXIT_SUCCESS
+}
+
+validate_path_security() {
+    local path="$1"
+
+    # Path traversal detection
+    if [[ "$path" =~ \.\. ]]; then
+        echo "ERROR: Path traversal detected"
+        echo "File: i18n-check.md:validate_path_security - Security Validation"
+        echo ""
+        echo "Security policy: File paths must not contain '..'"
+        return $EXIT_SECURITY_ERROR
+    fi
+
+    return $EXIT_SUCCESS
+}
+```
+
+#### Validation Execution
 
 Parse and validate $ARGUMENTS:
 - Sanitize language codes: validate against ISO 639-1 standard (2-letter codes) or BCP 47 (e.g., zh-CN)
 - Validate flags against allowed list: --coverage, --consistency, --format, --cultural, --complete
 - Reject unexpected patterns or characters
-- If language code contains suspicious patterns (../, special chars): report error and exit
-- If flag not in allowed list: report error with available options and exit
+- If language code contains suspicious patterns (../, special chars): report error and exit with $EXIT_SECURITY_ERROR
+- If flag not in allowed list: report error with available options and exit with $EXIT_USER_ERROR
+
+```bash
+# Execute validation
+if [[ -n "$LANG_CODE" ]]; then
+    validate_language_code "$LANG_CODE" || exit $?
+fi
+
+if [[ -n "$CHECK_SCOPE" ]]; then
+    validate_flag "$CHECK_SCOPE" || exit $?
+fi
+```
 
 ### 2. Initial Diagnosis and Check Strategy Decision
 
@@ -54,6 +157,37 @@ Auto-determine from check target:
 
 ### Automated i18n Diagnosis
 
+#### Common Functions (DRY Principle)
+
+```bash
+# Constants for i18n directory patterns
+readonly I18N_DIRS="locales i18n lang"
+readonly I18N_FILE_PATTERNS="*.json *.yaml *.po"
+
+# Find i18n translation files (reusable function)
+find_i18n_files() {
+    local file_type="${1:-*.json}"
+    find . -name "$file_type" \( \
+        -path "*/locales/*" -o \
+        -path "*/i18n/*" -o \
+        -path "*/lang/*" \
+    \) 2>/dev/null
+}
+
+# Detect i18n directory (reusable function)
+detect_i18n_dir() {
+    if [[ -d "locales" ]]; then
+        echo "locales"
+    elif [[ -d "i18n" ]]; then
+        echo "i18n"
+    elif [[ -d "public/locales" ]]; then
+        echo "public/locales"
+    else
+        echo ""
+    fi
+}
+```
+
 Automated i18n project analysis:
 ```bash
 # i18n framework detection
@@ -65,31 +199,35 @@ if [[ -f "package.json" ]]; then
     echo "i18next:" && grep -c "i18next" package.json 2>/dev/null || echo "0"
 fi
 
-# Translation file structure detection
+# Translation file structure detection (using common function)
 echo "Translation File Structure:"
-find . -name "*.json" -path "*/locales/*" -o -path "*/i18n/*" -o -path "*/lang/*" 2>/dev/null | head -5 || echo "No translation files found"
+I18N_FILES=$(find_i18n_files "*.json")
+echo "$I18N_FILES" | head -5 || echo "No translation files found"
 
-# Supported languages detection
+# Supported languages detection (using common function)
 echo "Supported Languages:"
-if [[ -d "locales" ]]; then
-    ls -1 locales/
-elif [[ -d "i18n" ]]; then
-    ls -1 i18n/
-elif [[ -d "public/locales" ]]; then
-    ls -1 public/locales/
+I18N_DIR=$(detect_i18n_dir)
+if [[ -n "$I18N_DIR" ]]; then
+    ls -1 "$I18N_DIR/"
 else
-    echo "No standard i18n directory structure detected"
+    echo "ERROR: No standard i18n directory structure detected"
+    echo "File: i18n-check.md:detect_i18n_dir - Directory Detection"
+    echo ""
+    echo "Searched directories: locales/, i18n/, public/locales/"
+    echo "Please create one of these directories for translation files"
+    exit $EXIT_USER_ERROR
 fi
 
-# Translation file format analysis
+# Translation file format analysis (using common function)
 echo "Translation File Formats:"
-find . -name "*.json" -path "*i18n*" -o -path "*locale*" | wc -l | sed 's/^/JSON files: /'
-find . -name "*.yaml" -path "*i18n*" -o -path "*locale*" | wc -l | sed 's/^/YAML files: /'
-find . -name "*.po" -path "*i18n*" -o -path "*locale*" | wc -l | sed 's/^/PO files: /'
+find_i18n_files "*.json" | wc -l | sed 's/^/JSON files: /'
+find_i18n_files "*.yaml" | wc -l | sed 's/^/YAML files: /'
+find_i18n_files "*.po" | wc -l | sed 's/^/PO files: /'
 
 # Recent translation activity
 echo "Recent Translation Activity:"
-git log --since="1 month ago" --name-only --pretty=format: | grep -E "(locales|i18n|lang)" | sort | uniq | wc -l | sed 's/^/Files modified: /'
+MODIFIED_COUNT=$(git log --since="1 month ago" --name-only --pretty=format: | grep -E "(locales|i18n|lang)" | sort | uniq | wc -l)
+echo "Files modified: $MODIFIED_COUNT"
 ```
 
 ## Interactive i18n Check Management (AskUserQuestion Integration)
@@ -282,22 +420,55 @@ Analysis steps:
 
 ### Pre-check Validation
 ```bash
-# Check i18n project structure
-if [[ ! -d "locales" && ! -d "i18n" && ! -d "lang" ]]; then
-  echo "No standard i18n directory detected"
-  echo "Searching for translation files..."
-  find . -name "*.json" | grep -E "(locale|i18n|lang|translation)" | head -5
+# Check i18n project structure (using common function)
+I18N_DIR=$(detect_i18n_dir)
+if [[ -z "$I18N_DIR" ]]; then
+    echo "ERROR: No standard i18n directory detected"
+    echo "File: i18n-check.md:pre_check_validation - Structure Detection"
+    echo ""
+    echo "Searching for translation files..."
+    FOUND_FILES=$(find . -name "*.json" | grep -E "(locale|i18n|lang|translation)" | head -5)
+    if [[ -n "$FOUND_FILES" ]]; then
+        echo "Found potential translation files:"
+        echo "$FOUND_FILES"
+        echo ""
+        echo "Suggestion: Move files to standard directory (locales/, i18n/, or lang/)"
+    else
+        echo "No translation files found"
+        echo "Suggestion: Create i18n directory and add translation files"
+    fi
+    exit $EXIT_USER_ERROR
 fi
 
-# Verify translation file format
-for file in locales/**/*.json i18n/**/*.json; do
+# Verify translation file format (using common function with error handling)
+echo "Validating JSON syntax..."
+INVALID_FILES=""
+for file in $(find_i18n_files "*.json"); do
     if [[ -f "$file" ]]; then
-        jq . "$file" >/dev/null 2>&1 || echo "Invalid JSON: $file"
+        if ! jq . "$file" >/dev/null 2>&1; then
+            INVALID_FILES="${INVALID_FILES}${file}\n"
+        fi
     fi
 done
 
+if [[ -n "$INVALID_FILES" ]]; then
+    echo "ERROR: Invalid JSON detected in translation files"
+    echo "File: i18n-check.md:pre_check_validation - JSON Validation"
+    echo ""
+    echo "Invalid files:"
+    echo -e "$INVALID_FILES"
+    echo ""
+    echo "Suggestion: Run 'jq . <file>' to identify syntax errors"
+    exit $EXIT_SYSTEM_ERROR
+fi
+
 # Check git repository status
-git status >/dev/null 2>&1 && echo "Git repository detected" || echo "Not a git repository"
+if ! git status >/dev/null 2>&1; then
+    echo "WARNING: Not a git repository"
+    echo "File: i18n-check.md:pre_check_validation - Git Detection"
+    echo ""
+    echo "Git tracking recommended for translation file history"
+fi
 ```
 
 ### Error Message Security

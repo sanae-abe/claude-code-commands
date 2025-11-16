@@ -32,9 +32,14 @@ Output: Conclusion-first format with comparison tables
 
 Parse $ARGUMENTS:
 - Extract question or options text
-- Sanitize special characters
 - Detect output format (single recommendation vs multiple proposals)
 - Detect framework type (tech selection vs prioritization vs architecture)
+
+Sanitize $ARGUMENTS:
+- No sanitization needed - Read/AskUserQuestion tools only
+- $ARGUMENTS used only as plain text input to AskUserQuestion
+- No Bash execution, no file path processing
+- Risk: Minimal - tools have built-in validation
 
 If $ARGUMENTS empty or unclear:
 - Use AskUserQuestion to clarify evaluation target
@@ -45,43 +50,77 @@ Security:
 - No Bash execution needed
 - Read-only access to decision-frameworks.md
 
+### Implementation Example
+
+```bash
+# Parse $ARGUMENTS
+IFS=' ' read -r -a args <<< "$ARGUMENTS"
+
+QUESTION=""
+for arg in "${args[@]}"; do
+    if [[ -z "$QUESTION" ]]; then
+        QUESTION="$arg"
+    fi
+done
+
+# Detect output format
+if [[ "$QUESTION" =~ "vs"|"compare" ]]; then
+    OUTPUT_FORMAT="single"
+elif [[ "$QUESTION" =~ "what to"|"priorities" ]]; then
+    OUTPUT_FORMAT="multiple"
+elif [[ "$QUESTION" =~ ^[0-9]+\. ]]; then
+    OUTPUT_FORMAT="prioritization"
+else
+    # Auto-decide based on candidate count
+    OUTPUT_FORMAT="auto"
+fi
+
+# Detect framework type
+if [[ "$QUESTION" =~ library|framework|tool ]]; then
+    FRAMEWORK="ice"
+elif [[ "$QUESTION" =~ architecture|design|approach ]]; then
+    FRAMEWORK="rice"
+elif [[ "$QUESTION" =~ risk|uncertain|confidence ]]; then
+    FRAMEWORK="confidence"
+else
+    FRAMEWORK="ice"  # Default
+fi
+```
+
+Note: This is reference syntax for LLM understanding. decide.md does not execute Bash - it uses Read/AskUserQuestion tools only.
+
 ## Auto-Detection Logic
 
+### Decision Table
+
+| Input Pattern | Output Format | Framework | Example | Line Ref |
+|---------------|---------------|-----------|---------|----------|
+| "A vs B", "which is better", "compare" | Single recommendation | ICE Score | "Zod vs Yup?" | 56 |
+| "what to improve", "what to add", "priorities" | Multiple proposals (top 3-5) | ICE Score | "What tests to add?" | 59 |
+| Numbered list "1. A 2. B 3. C" | Prioritization (rank all) | Eisenhower + ICE | "1. Dark mode 2. Export" | 62 |
+| Technology/library/tool names | (auto-detect format) | ICE Score | "validation library choice" | 71 |
+| Architecture/system design/approach | (auto-detect format) | RICE + Pre-mortem | "microservices vs monolith" | 74 |
+| Risk/uncertainty/confidence keywords | (auto-detect format) | Confidence + Spike | "uncertain about scaling" | 77 |
+| 3+ tasks or features | (auto-detect format) | Eisenhower + ICE | Multiple feature list | 80 |
+| Default (no match) | auto-decide by candidate count | ICE + First Principles | General questions | 83 |
+
+Auto-decide logic for output format:
+- 2 or fewer candidates → single recommendation
+- 3+ candidates → multiple proposals
+
+### Implementation Flow
+
+```
 Step 1: Detect output format from $ARGUMENTS
-
-```
-IF question contains "A vs B" OR "which is better" OR "compare":
-    Output format: single recommendation (choose one)
-
-ELIF question contains "what to improve" OR "what to add" OR "what should" OR "priorities":
-    Output format: multiple proposals (rank top 3-5)
-
-ELIF $ARGUMENTS contains numbered list ("1. A 2. B 3. C"):
-    Output format: prioritization (rank all items)
-
-ELSE:
-    Output format: auto-decide based on candidate count
-    If 2 or fewer candidates: single recommendation
-    If 3+ candidates: multiple proposals
-```
+  - Check explicit patterns (vs/compare/improve/add)
+  - Check for numbered lists
+  - Apply auto-decide logic if no match
 
 Step 2: Detect framework type from $ARGUMENTS
+  - Check domain keywords (tech/architecture/risk)
+  - Apply default framework if no match
 
-```
-IF mentions technology, library, tool names:
-    Framework: ICE Score evaluation
-
-ELIF mentions architecture, system design, implementation approach:
-    Framework: RICE Score + Pre-mortem
-
-ELIF mentions risk, uncertainty, confidence:
-    Framework: Confidence analysis + Spike recommendation
-
-ELIF contains 3+ tasks or features:
-    Framework: Eisenhower Matrix + ICE Score
-
-ELSE:
-    Framework: ICE Score + First Principles (general purpose)
+Step 3: Apply selected framework and generate output
 ```
 
 ## Framework Reference
@@ -91,10 +130,93 @@ Read required file:
 Read ~/.claude/docs/decision-frameworks.md
 ```
 
+Path validation:
+- Fixed path: ~/.claude/docs/decision-frameworks.md
+- No user input dependency - path is hardcoded
+- No path traversal risk - fixed location only
+- Validation: Read tool's built-in security checks
+
+Performance characteristics:
+- File size: Typically <10KB
+- Read latency: <10ms
+- Caching: OS-level caching for repeated access in same session
+- Impact: Negligible performance overhead
+
 If file read fails:
-- Report error with file location
+- Report error with file location (exit code 3)
 - Suggest checking symbolic link at ~/.claude/docs/decision-frameworks.md
 - Exit without attempting analysis
+
+## Error Handling
+
+### decision-frameworks.md Read Failure
+
+```bash
+# Pattern for LLM to follow (not executed as Bash)
+if ! Read ~/.claude/docs/decision-frameworks.md; then
+    echo "ERROR: decision-frameworks.md not found"
+    echo "File: decide.md:129 - Framework Reference"
+    echo ""
+    echo "Resolution:"
+    echo "1. Check symbolic link: ls -la ~/.claude/docs/decision-frameworks.md"
+    echo "2. Verify source file exists at ~/projects/claude-code-workspace/docs/decision-frameworks.md"
+    echo "3. Recreate symlink if needed"
+    exit 3
+fi
+```
+
+LLM implementation:
+- Use Read tool to access decision-frameworks.md
+- If Read fails, output error message above
+- Exit with code 3 (System error)
+
+### Empty $ARGUMENTS Handling
+
+```bash
+# Pattern for LLM to follow
+if [[ -z "$ARGUMENTS" ]]; then
+    # Use AskUserQuestion tool (not Bash)
+    # AskUserQuestion({
+    #   questions: [{
+    #     question: "What options or question would you like to evaluate?",
+    #     header: "Decision Target",
+    #     multiSelect: false,
+    #     options: [...]
+    #   }]
+    # })
+
+    # If user cancels:
+    echo "ERROR: No evaluation target specified"
+    echo "File: decide.md:44 - Argument Validation"
+    echo ""
+    echo "Operation cancelled by user"
+    exit 1
+fi
+```
+
+LLM implementation:
+- Check if $ARGUMENTS is empty
+- Use AskUserQuestion tool for interactive input
+- If cancelled, exit with code 1 (User error)
+
+### Invalid Framework Detection
+
+```
+IF detected framework is unclear:
+    echo "WARNING: Ambiguous input pattern"
+    echo "File: decide.md:92 - Auto-Detection Logic"
+    echo ""
+    echo "Defaulting to ICE Score + First Principles framework"
+    echo "For explicit framework selection, use keywords:"
+    echo "  - Technology selection: mention library/framework/tool names"
+    echo "  - Architecture: mention design/approach/system"
+    echo "  - Risk assessment: mention uncertainty/confidence/risk"
+```
+
+LLM implementation:
+- Always provide a default framework (ICE + First Principles)
+- Warn user if pattern matching is ambiguous
+- Continue with analysis using default
 
 ## Output Patterns
 
@@ -131,6 +253,29 @@ Reason: ICE Score [value] ([priority level]). [1-2 sentence rationale]
 ### Pattern B: Multiple Proposals
 
 Used when: "What to improve?" or "What should we do?" questions
+
+**Large Option Handling** (10+ items):
+```
+IF option count >= 10:
+  Phase 1: Quick filter with Impact-only score
+    - Evaluate Impact (1-10) for all options
+    - Keep top 20 options
+
+  Phase 2: Full ICE Score calculation
+    - Apply Impact × Confidence × Ease to top 20
+    - Rank by ICE Score
+
+  Phase 3: First Principles for top 5 only
+    - Detailed necessity verification
+    - YAGNI principle application
+
+Output:
+  - Detailed table: Top 10 options only
+  - Brief mention: Remaining options excluded (with count)
+
+Complexity: O(m) for Phase 1 + O(20) for Phase 2 + O(5) for Phase 3
+Where m = total option count
+```
 
 Structure:
 ```
@@ -369,10 +514,90 @@ Recommended workflow:
 ```bash
 # 0: Success - Decision analysis completed with recommendation
 # 1: User error - Arguments missing, unclear question
-# 2: Security error - (Not applicable - read-only command)
 # 3: System error - decision-frameworks.md not found, Read tool failed
-# 4: Unrecoverable error - Framework analysis failed critically
 ```
+
+### Usage in LLM Implementation
+
+**Exit code 0 (Success)**:
+```
+IF analysis completed successfully:
+    Output: Conclusion + Detailed Analysis + Final Recommendation
+    Exit: 0
+```
+
+**Exit code 1 (User error)**:
+```
+IF $ARGUMENTS empty AND AskUserQuestion cancelled:
+    Output: "ERROR: No evaluation target specified"
+            "File: decide.md:44 - Argument Validation"
+            "Operation cancelled by user"
+    Exit: 1
+
+IF $ARGUMENTS contains invalid characters (edge case):
+    Output: "ERROR: Invalid input format"
+            "File: decide.md:33 - Argument Validation"
+            "Special characters or malformed input detected"
+    Exit: 1
+```
+
+**Exit code 3 (System error)**:
+```
+IF Read decision-frameworks.md fails:
+    Output: "ERROR: decision-frameworks.md not found"
+            "File: decide.md:129 - Framework Reference"
+            "Resolution: [steps to fix]"
+    Exit: 3
+
+IF Read tool unavailable (system failure):
+    Output: "ERROR: Read tool failed"
+            "File: decide.md:129 - Framework Reference"
+            "System error - retry or report issue"
+    Exit: 3
+```
+
+### Exit Code Propagation Pattern
+
+LLM should follow this pattern:
+
+```typescript
+// Pseudocode for LLM logic
+try {
+    // Step 1: Validate arguments
+    if (isEmpty(ARGUMENTS)) {
+        const answer = AskUserQuestion(...)
+        if (cancelled) {
+            reportError("No evaluation target", 1)
+            return EXIT_CODE_1
+        }
+    }
+
+    // Step 2: Read framework reference
+    const frameworks = Read("~/.claude/docs/decision-frameworks.md")
+    if (!frameworks) {
+        reportError("decision-frameworks.md not found", 3)
+        return EXIT_CODE_3
+    }
+
+    // Step 3: Perform analysis
+    const result = analyzeWithFramework(ARGUMENTS, frameworks)
+
+    // Step 4: Generate output
+    outputResult(result)
+    return EXIT_CODE_0
+
+} catch (error) {
+    reportSystemError(error)
+    return EXIT_CODE_3
+}
+```
+
+Key principles:
+- Always return an exit code (0, 1, or 3)
+- Include file:line references in all error messages
+- Provide actionable resolution steps for errors
+- User errors (1) are recoverable by user action
+- System errors (3) require intervention or retry
 
 ## Output Format
 
@@ -419,14 +644,85 @@ Suggestions:
 
 ## Examples
 
-Input: /decide "Data validation library choice. Zod vs Yup?"
-Action: Apply ICE Score evaluation, single recommendation output format
+### Example 1: Technology Selection
 
-Input: /decide "What tests should we add to improve coverage?"
-Action: Apply ICE Score evaluation, multiple proposals output format (top 3-5)
+**Input**: `/decide "Data validation library choice. Zod vs Yup?"`
 
-Input: /decide "Priority for these features: 1. Dark mode 2. Export 3. Notifications"
-Action: Apply Eisenhower Matrix + ICE Score, prioritization output format
+**Detection**:
+- Pattern: "vs" → Single recommendation
+- Domain: library names → ICE Score framework
 
-Input: /decide
-Action: Use AskUserQuestion to get evaluation target
+**Expected Output**:
+```
+## Conclusion: Zod is recommended
+
+Reason: ICE Score 18.2 (Highest priority). Superior type safety,
+better DX, seamless TypeScript integration.
+
+## Detailed Analysis
+
+### ICE Score Evaluation
+| Option | Impact | Confidence | Ease | ICE Score |
+|--------|--------|------------|------|-----------|
+| Zod    | 8      | 90%        | 9    | 18.2      |
+| Yup    | 7      | 85%        | 8    | 15.9      |
+
+Impact rationale:
+- Zod: Type inference reduces boilerplate (8/10)
+- Yup: Established library with wide adoption (7/10)
+
+Confidence rationale:
+- Zod: 90% - successful migration cases documented
+- Yup: 85% - well-known patterns, proven track record
+```
+
+### Example 2: Feature Prioritization
+
+**Input**: `/decide "What tests should we add to improve coverage?"`
+
+**Detection**:
+- Pattern: "what to add" → Multiple proposals
+- Domain: testing → ICE Score framework
+
+**Expected Output**:
+```
+## Conclusion: Implement in following order
+
+1. Integration tests for API endpoints (ICE 16.5) - Highest priority
+   Reason: High impact (8), high confidence (75%), moderate ease (7)
+
+2. E2E tests for checkout flow (ICE 14.0) - High priority
+   Reason: Critical path (9), medium confidence (70%), lower ease (5)
+
+3. Unit tests for utility functions (ICE 12.0) - Medium priority
+   Reason: Medium impact (6), high confidence (80%), high ease (8)
+```
+
+### Example 3: Task Prioritization
+
+**Input**: `/decide "Priority for these features: 1. Dark mode 2. Export 3. Notifications"`
+
+**Detection**:
+- Pattern: numbered list → Prioritization
+- Domain: features → Eisenhower Matrix + ICE Score
+
+**Expected Output**:
+```
+## Conclusion: Priority ranking
+
+1. Notifications (ICE 18.0) - Immediate (Urgent & Important)
+2. Export (ICE 12.5) - Next sprint (Important, not urgent)
+3. Dark mode (ICE 8.0) - Rejected (YAGNI - nice-to-have)
+
+Reason: Notifications directly impact user engagement (high impact),
+Export enables critical workflows, Dark mode is cosmetic preference.
+```
+
+### Example 4: Interactive Mode
+
+**Input**: `/decide`
+
+**Action**: Use AskUserQuestion to get evaluation target
+- Question: "What options or question would you like to evaluate?"
+- User provides input via "Other" option
+- Proceed with detection and analysis

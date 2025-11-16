@@ -94,31 +94,41 @@ Use AskUserQuestion with the following options:
 #### Option A: Clean up all
 
 ```bash
-# Helper function: validate PID format
+# Helper functions
 validate_pid() {
     local pid=$1
     [[ "$pid" =~ ^[0-9]+$ ]]
 }
 
-# Get all job PIDs
-pids=($(jobs -p))
+kill_jobs() {
+    local pids=("$@")
 
-if [[ ${#pids[@]} -gt 0 ]]; then
+    if [[ ${#pids[@]} -eq 0 ]]; then
+        echo "No jobs to clean up"
+        return 0
+    fi
+
     # Batch kill (single system call for performance)
     if kill "${pids[@]}" 2>/dev/null; then
-        echo "All ${#pids[@]} jobs cleaned up"
+        echo "${#pids[@]} jobs cleaned up"
+        return 0
     else
         # Fallback: count successful kills
-        killed_count=0
+        local killed_count=0
         for pid in "${pids[@]}"; do
             validate_pid "$pid" && kill "$pid" 2>/dev/null && ((killed_count++))
         done
         echo "$killed_count jobs cleaned up"
-        echo "Some jobs may have already terminated"
+        if [[ $killed_count -lt ${#pids[@]} ]]; then
+            echo "Some jobs may have already terminated"
+        fi
+        return 0
     fi
-else
-    echo "No jobs to clean up"
-fi
+}
+
+# Get all job PIDs and kill them
+pids=($(jobs -p))
+kill_jobs "${pids[@]}"
 ```
 
 #### Option B: Select individually
@@ -132,20 +142,28 @@ job_numbers="$USER_INPUT"
 
 # Input validation: empty check
 if [[ -z "$job_numbers" ]]; then
-    echo "Error: No job numbers provided"
+    echo "ERROR: No job numbers provided"
+    echo "File: clean-jobs.md:135 - Input Validation"
+    echo ""
+    echo "Usage: Enter space-separated job numbers (e.g., 1 3 5)"
     exit 1
 fi
 
 # Input validation: format check (digits and spaces only)
 if [[ ! "$job_numbers" =~ ^[0-9\ ]+$ ]]; then
-    echo "Error: Job numbers must be digits and spaces only"
+    echo "ERROR: Job numbers must be digits and spaces only"
+    echo "File: clean-jobs.md:141 - Format Validation"
+    echo ""
     echo "Example: 1 3 5"
     exit 1
 fi
 
 # Input validation: length limit (DoS prevention)
 if [[ ${#job_numbers} -gt 100 ]]; then
-    echo "Error: Input too long (max 100 characters)"
+    echo "ERROR: Input too long (max 100 characters)"
+    echo "File: clean-jobs.md:148 - DoS Prevention"
+    echo ""
+    echo "Reduce number of job selections"
     exit 1
 fi
 
@@ -162,21 +180,8 @@ for job_num in $job_numbers; do
     fi
 done
 
-# Batch kill (performance optimization)
-if [[ ${#pids[@]} -gt 0 ]]; then
-    if kill "${pids[@]}" 2>/dev/null; then
-        killed_count=${#pids[@]}
-        echo "$killed_count jobs cleaned up"
-    else
-        # Fallback: count successful kills
-        killed_count=0
-        for pid in "${pids[@]}"; do
-            validate_pid "$pid" && kill "$pid" 2>/dev/null && ((killed_count++))
-        done
-        echo "$killed_count jobs cleaned up"
-        echo "Some jobs may have already terminated"
-    fi
-fi
+# Kill jobs using helper function
+kill_jobs "${pids[@]}"
 
 # Report failed job numbers
 if [[ ${#failed_jobs[@]} -gt 0 ]]; then
@@ -301,17 +306,10 @@ if [[ "$AUTO_MODE" == "true" ]]; then
         fi
     done < <(jobs -l)
 
-    # Batch kill
+    # Kill cleanup_required jobs using helper function
     if [[ ${#cleanup_pids[@]} -gt 0 ]]; then
-        if kill "${cleanup_pids[@]}" 2>/dev/null; then
-            echo "✓ Cleaned up ${#cleanup_pids[@]} background jobs"
-        else
-            killed_count=0
-            for pid in "${cleanup_pids[@]}"; do
-                kill "$pid" 2>/dev/null && ((killed_count++))
-            done
-            echo "✓ Cleaned up $killed_count background jobs"
-        fi
+        echo "✓ Cleaned up background jobs:"
+        kill_jobs "${cleanup_pids[@]}"
     else
         echo "No background jobs to clean up"
     fi
@@ -322,13 +320,22 @@ fi
 
 ## Exit Code System
 
+Exit code constants (define at start of implementation):
+
 ```bash
-# 0: Success - Jobs cleaned up successfully
-# 1: User error - Invalid job numbers, no jobs to clean
-# 2: Security error - Input validation failed, suspicious input
-# 3: System error - Kill command failed, jobs command unavailable
-# 4: Unrecoverable error - Critical cleanup failure
+readonly EXIT_SUCCESS=0
+readonly EXIT_USER_ERROR=1
+readonly EXIT_SECURITY_ERROR=2
+readonly EXIT_SYSTEM_ERROR=3
+readonly EXIT_UNRECOVERABLE=4
 ```
+
+Exit code usage:
+- `EXIT_SUCCESS` (0): Jobs cleaned up successfully
+- `EXIT_USER_ERROR` (1): Invalid job numbers, no jobs to clean
+- `EXIT_SECURITY_ERROR` (2): Input validation failed, suspicious input
+- `EXIT_SYSTEM_ERROR` (3): Kill command failed, jobs command unavailable
+- `EXIT_UNRECOVERABLE` (4): Critical cleanup failure
 
 ## Session Isolation
 

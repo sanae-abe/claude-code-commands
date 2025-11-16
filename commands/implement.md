@@ -25,17 +25,272 @@ Document-driven task implementation with automatic context injection from tasks.
 
 ## Argument Validation
 
-Parse $ARGUMENTS to extract task ID:
-- Format: `task-N` where N is a number
-- Example: `task-1`, `task-42`
+Execute validation before any operations:
 
-If no argument provided:
-- List all pending tasks
-- Ask user to select one
+```bash
+# Validate task ID format
+validate_task_id() {
+  local task_id="$1"
 
-If invalid format:
-- Report error and show correct format
-- Exit
+  # Empty is OK (will list tasks)
+  if [[ -z "$task_id" ]]; then
+    return 0
+  fi
+
+  # Validate format: task-N (prevent injection)
+  if [[ ! "$task_id" =~ ^task-[0-9]+$ ]]; then
+    echo "ERROR: Invalid task ID format: $task_id"
+    echo "Expected: task-N (e.g., task-1, task-42)"
+    echo "Example: /implement task-1"
+    exit 1
+  fi
+}
+
+# Safe argument parsing
+TASK_ID="$ARGUMENTS"
+validate_task_id "$TASK_ID"
+```
+
+If validation fails: exit with error code 1 (user error)
+If no argument: list pending tasks via Python script (line 104-116)
+
+## Interactive Mode (New Feature Creation)
+
+**Purpose**: Create new features interactively when task-id not specified and $ARGUMENTS contains natural language requirements.
+
+**Trigger conditions**:
+```bash
+# Detect interactive mode
+if [[ -z "$TASK_ID" ]] && [[ -n "$ARGUMENTS" ]]; then
+  # $ARGUMENTS contains natural language (e.g., "user profile editing")
+  INTERACTIVE_MODE=true
+fi
+```
+
+**Execution flow**:
+
+1. **Parse natural language requirements** from $ARGUMENTS
+2. **Use AskUserQuestion** to determine implementation approach
+3. **Auto-generate tasks.yml entry** based on selections
+4. **Execute /implement task-N** automatically with new task
+
+**Implementation Type Selection**:
+
+Use AskUserQuestion to determine feature type:
+
+```typescript
+AskUserQuestion({
+  questions: [{
+    question: "Select the type of feature to implement",
+    header: "Implementation Type",
+    multiSelect: false,
+    options: [
+      {
+        label: "ui-component",
+        description: "UI components and screen features (forms, displays, interactions)"
+      },
+      {
+        label: "api-integration",
+        description: "API integration and data processing (REST API, GraphQL, data fetch/update)"
+      },
+      {
+        label: "business-logic",
+        description: "Business logic and state management (calculations, validation, workflows)"
+      },
+      {
+        label: "integration-feature",
+        description: "Integrated features (multiple component coordination, system integration)"
+      },
+      {
+        label: "infrastructure",
+        description: "Infrastructure and configuration (build, deploy, environment setup)"
+      },
+      {
+        label: "architecture-change",
+        description: "Architecture changes (structural improvements, new pattern introduction)"
+      }
+    ]
+  }]
+})
+```
+
+**Complexity Level Selection**:
+
+Use AskUserQuestion to determine scope:
+
+```typescript
+AskUserQuestion({
+  questions: [{
+    question: "Select the implementation scope and complexity",
+    header: "Complexity",
+    multiSelect: false,
+    options: [
+      {
+        label: "simple",
+        description: "Simple (single file/component, 1-2 hours)"
+      },
+      {
+        label: "moderate",
+        description: "Moderate (multiple files, related feature updates, half day)"
+      },
+      {
+        label: "complex",
+        description: "Complex (new patterns/libraries, 1-2 days)"
+      },
+      {
+        label: "architectural",
+        description: "Architectural level (design changes, long-term implementation)"
+      }
+    ]
+  }]
+})
+```
+
+**Auto-generate tasks.yml entry**:
+
+```python
+# Python script to append new task
+import yaml
+from datetime import datetime
+
+# Read existing tasks.yml or create new one
+try:
+    with open('tasks.yml', 'r') as f:
+        data = yaml.safe_load(f) or {'project': {}, 'tasks': []}
+except FileNotFoundError:
+    data = {
+        'project': {
+            'name': 'Project Tasks',
+            'last_updated': ''
+        },
+        'tasks': []
+    }
+
+# Generate new task ID
+existing_ids = [int(t['id'].split('-')[1]) for t in data['tasks'] if t['id'].startswith('task-')]
+new_id = max(existing_ids, default=0) + 1
+
+# Map complexity to effort
+complexity_to_effort = {
+    'simple': '1-2h',
+    'moderate': '4h',
+    'complex': '1-2d',
+    'architectural': '3-5d'
+}
+
+# Create new task entry
+new_task = {
+    'id': f'task-{new_id}',
+    'goal': '$ARGUMENTS',  # Natural language requirement
+    'type': '$IMPLEMENTATION_TYPE',  # From AskUserQuestion
+    'status': 'pending',
+    'priority': 'medium',
+    'effort': complexity_to_effort['$COMPLEXITY'],  # From AskUserQuestion
+    'created_at': datetime.utcnow().isoformat() + 'Z',
+    'docs': [],  # LLM can populate based on implementation type
+    'acceptance_criteria': []  # LLM can generate based on requirement
+}
+
+data['tasks'].append(new_task)
+data['project']['last_updated'] = datetime.utcnow().isoformat() + 'Z'
+
+# Write back to tasks.yml
+with open('tasks.yml', 'w') as f:
+    yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+print(f"✅ Created {new_task['id']}: {new_task['goal']}")
+```
+
+**Execute implementation**:
+
+After tasks.yml creation, automatically execute:
+```bash
+/implement task-N
+```
+
+This triggers the standard document-driven implementation flow (lines 17-24).
+
+**Example usage**:
+
+```bash
+# Interactive mode with natural language
+/implement "user profile editing feature"
+
+# Output:
+# [AskUserQuestion: Select implementation type]
+# User selects: ui-component
+# [AskUserQuestion: Select complexity]
+# User selects: moderate
+# ✅ Created task-5: user profile editing feature
+# [Automatically executes: /implement task-5]
+# [Standard implementation flow with document context injection]
+```
+
+**Integration with feature.md**:
+
+This Interactive Mode replaces the standalone `/feature` command, providing:
+- Same AskUserQuestion workflow
+- Enhanced with automatic document context injection
+- Seamless transition to implementation
+- tasks.yml-based tracking (vs. ephemeral TodoWrite in `/feature`)
+
+## Security Implementation
+
+**MANDATORY: Execute these validations BEFORE Python execution**
+
+```bash
+# 1. Validate task ID format (already in Argument Validation)
+# See lines 31-47 above
+
+# 2. Validate document references (prevent path traversal)
+validate_document_reference() {
+  local doc_ref="$1"
+
+  # Reject path traversal
+  if [[ "$doc_ref" =~ \.\. ]]; then
+    echo "ERROR: Path traversal detected in document reference: $doc_ref"
+    echo "Security policy: relative paths within project only"
+    exit 2
+  fi
+
+  # Reject absolute paths
+  if [[ "$doc_ref" =~ ^/ ]]; then
+    echo "ERROR: Absolute paths not allowed in document references: $doc_ref"
+    echo "Use relative paths from project root"
+    exit 2
+  fi
+
+  # Extract file path (before #)
+  local file_path="${doc_ref%%#*}"
+
+  # Validate file exists (warn if not, but don't fail)
+  if [[ -n "$file_path" ]] && [[ ! -f "$file_path" ]]; then
+    echo "WARNING: Document not found: $file_path"
+    echo "Continuing without this reference..."
+    return 1
+  fi
+
+  return 0
+}
+
+# 3. Validate tasks.yml (prevent YAML injection)
+# Python handles YAML parsing with safe_load (line 99)
+# yaml.safe_load() prevents arbitrary Python object execution
+```
+
+**Execution order**:
+1. validate_task_id "$TASK_ID" (Argument Validation section)
+2. Auto-create tasks.yml if missing (line 68-79)
+3. Load and validate tasks.yml with Python yaml.safe_load (line 99)
+4. validate_document_reference for each doc reference (before Read)
+5. Execute implementation
+
+**Exit codes**:
+- 0: Success
+- 1: User error (invalid task ID format)
+- 2: Security error (path traversal, absolute path)
+- 3: System error (tasks.yml parsing failed, Python unavailable)
+- 4: Dependency not met (required task not completed)
 
 ## Tool Usage
 
@@ -315,23 +570,113 @@ fi
 
 **Note**: Most error handling (tasks.yml not found, task not found, dependencies not met) is now integrated into the unified Python script in the "Load Task Context" section above.
 
-**Invalid task ID format** (optional additional validation):
+### Invalid Task ID Format
+
 ```bash
-if [ -n "$TASK_ID" ] && ! echo "$TASK_ID" | grep -qE '^task-[0-9]+$'; then
-  echo "ERROR: Invalid task ID format"
-  echo "Expected: task-N (e.g., task-1)"
-  exit 1
-fi
+# Invalid task ID (detected by validate_task_id)
+ERROR: Invalid task ID format: task-abc
+Expected: task-N (e.g., task-1, task-42)
+Example: /implement task-1
+
+Resolution:
+  - Use numeric task ID from tasks.yml
+  - List available tasks: /implement (no arguments)
+  - Verify task ID format: ^task-[0-9]+$
 ```
 
-**Document reference not found**:
+### Task Not Found
+
 ```bash
-# If document file doesn't exist, warn but continue
-if [ ! -f "$FILE_PATH" ]; then
-  echo "⚠️  WARNING: Document not found: $FILE_PATH"
-  echo "Continuing without this reference..."
-fi
+# Task ID not found in tasks.yml
+ERROR: Task task-99 not found in tasks.yml
+
+Resolution:
+  - List available pending tasks: /implement
+  - Check tasks.yml for correct task ID
+  - Verify task hasn't been deleted or renamed
+  - Example: /implement task-1
 ```
+
+### Dependency Not Completed
+
+```bash
+# Required dependency not completed (detected by Python script)
+ERROR: Dependency task-1 not completed (status: pending)
+
+Resolution:
+  - Complete dependency first: /implement task-1
+  - Check dependency chain in tasks.yml:
+    tasks:
+      - id: task-2
+        depends_on: [task-1]
+  - Adjust task order if needed
+  - Verify dependency status: status: completed
+```
+
+### Document Reference Not Found
+
+```bash
+# Document file doesn't exist
+WARNING: Document not found: docs/design.md
+Continuing without this reference...
+
+Resolution:
+  - Verify document path in tasks.yml:
+    docs: ["docs/design.md#Section"]
+  - Create missing document if needed
+  - Update docs array to remove invalid reference
+  - Implementation continues without the document
+```
+
+### tasks.yml Parsing Failed
+
+```bash
+# YAML syntax error
+ERROR: Failed to load tasks.yml: mapping values are not allowed here
+  in "tasks.yml", line 12, column 18
+
+Resolution:
+  - Check YAML syntax at line 12
+  - Validate YAML structure:
+    - Proper indentation (2 spaces)
+    - No tabs
+    - Correct array/object syntax
+  - Use YAML validator: yamllint tasks.yml
+  - Example of valid structure:
+    tasks:
+      - id: task-1
+        goal: "Description"
+        status: pending
+```
+
+### PyYAML Not Installed
+
+```bash
+# Python YAML library missing
+ERROR: Failed to load tasks.yml: No module named 'yaml'
+
+Resolution:
+  - Install PyYAML:
+    pip3 install PyYAML
+  - Verify installation:
+    python3 -c "import yaml; print(yaml.__version__)"
+  - Alternative: Use conda/venv if project requires
+```
+
+### Security Guidelines
+
+**Error message safety**:
+- Never expose absolute paths in error messages (use relative paths from project root)
+- Never expose stack traces or internal details
+- Report only user-actionable information
+- Sanitize all user input before displaying
+
+**Exit codes**:
+- 0: Success - Task implemented successfully, status updated
+- 1: User error - Invalid task ID, task not found
+- 2: Security error - Path traversal, absolute path detected
+- 3: System error - tasks.yml parsing failed, Python unavailable
+- 4: Dependency error - Required task not completed
 
 ## Examples
 
@@ -383,6 +728,197 @@ Available pending tasks:
 
 Usage: /implement <task-id>
 ```
+
+### Dependency chain handling
+```
+/implement task-2
+```
+
+Output:
+```
+ERROR: Dependency task-1 not completed (status: pending)
+
+Resolution:
+  - Complete dependency first: /implement task-1
+  - Check dependency chain in tasks.yml:
+    tasks:
+      - id: task-2
+        goal: "Write unit tests for authentication"
+        depends_on: [task-1]
+        status: pending
+  - Adjust task order if needed
+  - Verify dependency status: status: completed
+
+# After completing task-1:
+/implement task-2
+
+Output:
+✅ Task context loaded successfully
+Task: Write unit tests for authentication
+Priority: high
+Type: test
+Dependencies: task-1 (completed)
+
+Document References (1):
+  - docs/testing.md#Unit-Testing-Patterns
+
+[Implements unit tests]
+✅ Task task-2 marked as completed
+✅ todos.mdも更新しました: #task-2
+```
+
+### Document reference with section extraction
+```
+/implement task-3
+```
+
+tasks.yml configuration:
+```yaml
+- id: task-3
+  goal: "Implement payment processing"
+  docs:
+    - "docs/design.md#Payment-Architecture"
+    - "docs/api-spec.md#Payment-Endpoints"
+    - "docs/security.md#PCI-Compliance"
+  acceptance_criteria:
+    - "Credit card data encrypted at rest"
+    - "Payment API returns transaction ID"
+    - "Failed payments logged securely"
+```
+
+Output:
+```
+✅ Task context loaded successfully
+Task: Implement payment processing
+Priority: critical
+Type: implementation
+
+Document References (3):
+  - docs/design.md#Payment-Architecture
+  - docs/api-spec.md#Payment-Endpoints
+  - docs/security.md#PCI-Compliance
+
+Loading: docs/design.md#Payment-Architecture
+Loading: docs/api-spec.md#Payment-Endpoints
+Loading: docs/security.md#PCI-Compliance
+
+Acceptance Criteria:
+  1. Credit card data encrypted at rest
+  2. Payment API returns transaction ID
+  3. Failed payments logged securely
+
+[All 3 document sections loaded automatically]
+[Implements payment processing with full context]
+✅ Task task-3 marked as completed
+
+Next steps:
+  1. Run /validate --layers=all
+  2. Create commit with /commit
+  3. Continue with /implement task-4
+```
+
+### Error handling demonstration
+```
+/implement task-abc
+```
+
+Output:
+```
+ERROR: Invalid task ID format: task-abc
+Expected: task-N (e.g., task-1, task-42)
+Example: /implement task-1
+
+Resolution:
+  - Use numeric task ID from tasks.yml
+  - List available tasks: /implement (no arguments)
+  - Verify task ID format: ^task-[0-9]+$
+```
+
+```
+/implement task-999
+```
+
+Output:
+```
+ERROR: Task task-999 not found in tasks.yml
+
+Resolution:
+  - List available pending tasks: /implement
+  - Check tasks.yml for correct task ID
+  - Verify task hasn't been deleted or renamed
+  - Example: /implement task-1
+```
+
+### Document reference not found (warning mode)
+```
+/implement task-4
+```
+
+tasks.yml configuration:
+```yaml
+- id: task-4
+  goal: "Update user profile UI"
+  docs:
+    - "docs/design.md#Profile-UI"  # This file doesn't exist
+    - "docs/components.md#ProfileForm"  # This exists
+```
+
+Output:
+```
+✅ Task context loaded successfully
+Task: Update user profile UI
+
+Document References (2):
+  - docs/design.md#Profile-UI
+  - docs/components.md#ProfileForm
+
+Loading: docs/design.md#Profile-UI
+WARNING: Document not found: docs/design.md
+Continuing without this reference...
+
+Loading: docs/components.md#ProfileForm
+[Loads ProfileForm component documentation]
+
+[Implementation continues with available context]
+✅ Task task-4 marked as completed
+
+Note: Implementation completed despite missing docs/design.md
+Recommendation: Update tasks.yml to remove invalid reference
+```
+
+## External References
+
+**Related workflows**:
+- `/validate --layers=all` - Multi-layer quality gate validation after implementation
+- `/commit` - Conventional Commits creation after task completion
+- `/ship` - Create PR/MR with task implementation
+- `/todo` - Task management integration (automatic todos.md sync)
+
+**Task management**:
+- tasks.yml schema: See `~/.claude/schemas/tasks-schema.yml` for valid structure
+- Document-driven workflow: See CLAUDE.md "基本開発フロー" section
+- Acceptance criteria patterns: See `~/.claude/templates/acceptance-criteria.yml`
+
+**Document reference formats**:
+- Markdown sections: `docs/design.md#Section-Name`
+- API specifications: `docs/api.md#Endpoint-Name`
+- Security requirements: `docs/security.md#Requirement-Name`
+- Multiple references: `["docs/a.md#S1", "docs/b.md#S2"]`
+
+**Python dependencies**:
+- PyYAML 5.x+: YAML safe loading with injection prevention
+- Installation: `pip3 install PyYAML`
+- Verification: `python3 -c "import yaml; print(yaml.__version__)"`
+
+**Validation patterns**:
+- Input validation: See `~/.claude/validation/input-patterns.sh`
+- Security checks: See `~/.claude/validation/security-patterns.json`
+- Path traversal prevention: Whitelist validation approach
+
+**Agent delegation**:
+- Explore agent: Task(subagent_type=Explore) for codebase discovery
+- Implementation agents: fullstack-developer, backend-developer, frontend-developer
+- Review agents: code-reviewer (post-implementation quality check)
 
 ## Integration with Other Commands
 

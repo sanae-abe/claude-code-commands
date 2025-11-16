@@ -171,6 +171,53 @@ Suggested deletions:
 ## Implementation
 
 ```bash
+# Exit code constants (single source of truth)
+readonly EXIT_SUCCESS=0
+readonly EXIT_USER_ERROR=1
+readonly EXIT_SECURITY_ERROR=2
+readonly EXIT_SYSTEM_ERROR=3
+readonly EXIT_UNRECOVERABLE=4
+
+# Validation functions
+validate_report_format() {
+    local format="$1"
+    if [[ ! "$format" =~ ^(text|json)$ ]]; then
+        echo "ERROR: Invalid report format: $format"
+        echo "File: review-quality.md:197 - Argument Parsing"
+        echo ""
+        echo "Valid formats: text, json"
+        echo "Example: /review-quality file.md --report=json"
+        return $EXIT_USER_ERROR
+    fi
+    return $EXIT_SUCCESS
+}
+
+validate_file_path() {
+    local file_path="$1"
+
+    # Security validation (prevent path traversal)
+    if [[ "$file_path" =~ \.\. ]]; then
+        echo "ERROR: Path traversal detected in file path"
+        echo "File: review-quality.md:211 - Security Validation"
+        echo ""
+        echo "Security policy: File paths must not contain '..'"
+        echo "Use absolute paths or paths relative to current directory"
+        return $EXIT_SECURITY_ERROR
+    fi
+
+    # File existence check
+    if [[ ! -f "$file_path" ]]; then
+        echo "ERROR: File not found: $file_path"
+        echo "File: review-quality.md:222 - File Validation"
+        echo ""
+        echo "Verify the file path is correct"
+        echo "Current directory: $(pwd)"
+        return $EXIT_USER_ERROR
+    fi
+
+    return $EXIT_SUCCESS
+}
+
 # Parse arguments
 TARGET_FILE=""
 REPORT_FORMAT="text"
@@ -181,6 +228,7 @@ for arg in "${args[@]}"; do
     case "$arg" in
         --report=*)
             REPORT_FORMAT="${arg#*=}"
+            validate_report_format "$REPORT_FORMAT" || exit $?
             ;;
         *)
             if [[ -z "$TARGET_FILE" ]]; then
@@ -190,17 +238,17 @@ for arg in "${args[@]}"; do
     esac
 done
 
-# Validate target
+# Validate target file
 if [[ -z "$TARGET_FILE" ]]; then
     echo "ERROR: No target file specified"
+    echo "File: review-quality.md:238 - Argument Validation"
+    echo ""
     echo "Usage: /review-quality <file-path> [--report=text|json]"
-    exit 1
+    echo "Example: /review-quality ~/.claude/commands/ship.md"
+    exit $EXIT_USER_ERROR
 fi
 
-if [[ ! -f "$TARGET_FILE" ]]; then
-    echo "ERROR: File not found: $TARGET_FILE"
-    exit 1
-fi
+validate_file_path "$TARGET_FILE" || exit $?
 
 # Identify type
 if [[ "$TARGET_FILE" == *"CLAUDE.md" ]]; then
@@ -212,12 +260,35 @@ else
 fi
 
 # Apply evaluation criteria
-# [Use Read tool to analyze file]
-# [Apply checklist based on TARGET_TYPE]
-# [Generate scores and recommendations]
+echo "🔍 Analyzing $TARGET_FILE..."
+echo "Type: $TARGET_TYPE"
+echo ""
 
-# Output report
-# [Format according to REPORT_FORMAT]
+# Use Read tool to analyze file content
+# Evaluate against type-specific checklist (L41-87)
+# Calculate scores based on criteria met
+# Generate quality report with evidence
+
+# For Slash Commands (L45-67):
+# - Check Bash syntax examples: Grep for '```bash'
+# - Check error handling: Grep for 'exit \$EXIT_'
+# - Check file:line references: Grep for 'File:.*\.md:[0-9]'
+# - Check validation functions: Grep for 'validate_.*() {'
+# - Check security considerations: Grep for 'security|Security'
+# - Check output examples: Grep for '# Output:'
+
+# For CLAUDE.md (L71-87):
+# - Check concrete instructions: Look for code blocks, decision trees
+# - Check external references: Grep for '~/.claude/'
+# - Check priorities: Grep for 'MUST|SHOULD|MAY'
+# - Check structured format: Look for YAML, tables, code blocks
+
+# Generate report in format specified by REPORT_FORMAT
+# Use template from L104-169 for structure
+# Include actionable recommendations based on gaps found
+
+echo "✅ Quality review completed"
+echo "Report format: $REPORT_FORMAT"
 ```
 
 ## Examples
@@ -250,39 +321,115 @@ fi
 
 ## Exit Code System
 
-```bash
-# 0: Success - Quality review completed, score calculated
-# 1: User error - File not found, invalid file type
-# 2: Security error - Path traversal detected, validation failure
-# 3: System error - Read tool failed, grep unavailable
-# 4: Unrecoverable error - Critical review failure
-```
+Exit codes are defined as constants in Implementation section (L175-179):
 
-## Bash Syntax Examples
-
-```bash
-# Safe file path validation
-TARGET_FILE="$ARGUMENTS"
-if [[ "$TARGET_FILE" =~ \.\. ]]; then
-  echo "ERROR: Path traversal detected"
-  exit 2
-fi
-
-# Safe parameter expansion for file type detection
-if [[ "$TARGET_FILE" == *"CLAUDE.md" ]]; then
-  TARGET_TYPE="CLAUDE.md"
-elif [[ "$TARGET_FILE" == *.md ]] && [[ "$TARGET_FILE" == *"/commands/"* ]]; then
-  TARGET_TYPE="slash-command"
-fi
-
-# Safe IFS usage
-IFS=' ' read -r -a args <<< "$ARGUMENTS"
-TARGET_FILE="${args[0]}"
-REPORT_FORMAT="${args[1]:-text}"  # Default to text
-```
+- `EXIT_SUCCESS` (0): Quality review completed, score calculated
+- `EXIT_USER_ERROR` (1): User error (file not found, invalid arguments)
+- `EXIT_SECURITY_ERROR` (2): Security error (path traversal detected)
+- `EXIT_SYSTEM_ERROR` (3): System error (Read tool failed, grep unavailable)
+- `EXIT_UNRECOVERABLE` (4): Unrecoverable error (critical review failure)
 
 ## Performance Notes
 
 - File size <10KB: <5 seconds
 - File size 10-50KB: 5-15 seconds
 - Uses Read + Grep (no external tools)
+
+## Troubleshooting
+
+### ERROR: File not found
+
+**Symptoms**: Command exits with "File not found: <path>"
+
+**Solutions**:
+1. Verify file path exists:
+   ```bash
+   ls -l <file-path>
+   ```
+
+2. Use absolute path instead of relative:
+   ```bash
+   # Instead of: /review-quality ../commands/ship.md
+   /review-quality ~/.claude/commands/ship.md
+   ```
+
+3. Check current directory:
+   ```bash
+   pwd  # Verify you're in the expected location
+   ```
+
+### ERROR: Path traversal detected
+
+**Symptoms**: Command exits with "Path traversal detected in file path"
+
+**Cause**: File path contains '..' which is blocked for security
+
+**Solutions**:
+1. Use absolute paths:
+   ```bash
+   # Instead of: /review-quality ../../.claude/CLAUDE.md
+   /review-quality ~/.claude/CLAUDE.md
+   ```
+
+2. Navigate to directory first:
+   ```bash
+   cd ~/.claude/commands
+   /review-quality validate.md
+   ```
+
+### ERROR: Invalid report format
+
+**Symptoms**: Command exits with "Invalid report format: <format>"
+
+**Solutions**:
+1. Use valid format (text or json):
+   ```bash
+   /review-quality file.md --report=text
+   /review-quality file.md --report=json
+   ```
+
+2. Check for typos:
+   ```bash
+   # Incorrect: --report=txt
+   # Correct:   --report=text
+   ```
+
+### Low Quality Scores
+
+**Symptoms**: Report shows scores <90%
+
+**Analysis Steps**:
+1. Check which dimension is low (Accuracy/Maintainability/Usability)
+
+2. Review "Detailed Findings" section for specific gaps
+
+3. Apply "Priority Recommendations" in order (HIGH first)
+
+4. Re-run review after improvements:
+   ```bash
+   /review-quality <same-file> --report=text
+   ```
+
+### No Bash Syntax Examples Found
+
+**Symptoms**: Accuracy score low, "Bash syntax examples" marked as missing
+
+**Solutions** (for slash command files):
+1. Add code blocks with bash syntax:
+   ````markdown
+   ```bash
+   IFS=' ' read -r -a args <<< "$ARGUMENTS"
+   ```
+   ````
+
+2. Include parameter expansion examples:
+   ```bash
+   PARAM="${arg#*=}"  # Remove prefix
+   ```
+
+3. Show error handling patterns:
+   ```bash
+   if [[ condition ]]; then
+       exit $EXIT_USER_ERROR
+   fi
+   ```

@@ -14,17 +14,39 @@ Arguments: $ARGUMENTS
 
 Automatically detect platform from git remote URL:
 ```bash
-REMOTE_URL=$(git remote get-url origin 2>/dev/null)
-if [[ $REMOTE_URL == *"github.com"* ]]; then
-  PLATFORM="github"
-  CLI_CMD="gh"
-elif [[ $REMOTE_URL == *"gitlab.com"* ]] || [[ $REMOTE_URL == *"gitlab"* ]]; then
-  PLATFORM="gitlab"
-  CLI_CMD="glab"
-else
-  # Report error: unsupported platform
-  exit 1
-fi
+# Platform detection function (single source of truth)
+detect_platform() {
+  local remote_url
+  remote_url=$(git remote get-url origin 2>/dev/null) || {
+    echo "ERROR: Git remote not found"
+    echo "File: ship.md:16 - detect_platform()"
+    echo ""
+    echo "Ensure you are in a git repository with a remote configured"
+    echo "Run: git remote -v"
+    exit $EXIT_UNRECOVERABLE
+  }
+
+  case "$remote_url" in
+    *github.com*)
+      echo "github gh"
+      ;;
+    *gitlab*)
+      echo "gitlab glab"
+      ;;
+    *)
+      echo "ERROR: Unsupported platform: $remote_url"
+      echo "File: ship.md:16 - detect_platform()"
+      echo ""
+      echo "Supported platforms:"
+      echo "  - GitHub (github.com)"
+      echo "  - GitLab (gitlab.com, self-hosted GitLab)"
+      exit $EXIT_UNRECOVERABLE
+      ;;
+  esac
+}
+
+# Usage
+read -r PLATFORM CLI_CMD <<< "$(detect_platform)"
 ```
 
 ## Argument Processing
@@ -35,10 +57,224 @@ Parse from $ARGUMENTS:
 - If $ARGUMENTS empty: interactive mode
 - Validate title format: `<type>(<scope>): <subject>` pattern
 
-Security validation:
-- Sanitize branch names: reject paths with `../`, validate against git branch list
-- Escape special shell characters in arguments before Bash execution
-- Never pass user input directly to shell commands
+## Security Implementation
+
+**MANDATORY: Execute these validations BEFORE ANY PR/MR creation**
+
+```bash
+# Exit code constants (single source of truth)
+readonly EXIT_SUCCESS=0
+readonly EXIT_USER_ERROR=1
+readonly EXIT_SECURITY_ERROR=2
+readonly EXIT_SYSTEM_ERROR=3
+readonly EXIT_UNRECOVERABLE=4
+
+# 1. Validate branch name (prevent path traversal)
+validate_branch_name() {
+  local branch="$1"
+
+  # Empty check
+  if [[ -z "$branch" ]]; then
+    echo "ERROR: Branch name required"
+    echo "File: ship.md:55 - validate_branch_name()"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Path traversal detection
+  if [[ "$branch" =~ \.\. ]]; then
+    echo "ERROR: Path traversal detected in branch name: $branch"
+    echo "File: ship.md:61 - validate_branch_name()"
+    echo ""
+    echo "Security policy: Branch names must not contain '..'"
+    exit $EXIT_SECURITY_ERROR
+  fi
+
+  # Whitelist validation: alphanumeric, -, _, /
+  if [[ ! "$branch" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
+    echo "ERROR: Invalid branch name format: $branch"
+    echo "File: ship.md:70 - validate_branch_name()"
+    echo ""
+    echo "Allowed characters: a-z, A-Z, 0-9, -, _, /"
+    echo "Example: feature/user-profile, fix/auth-bug"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Verify branch exists
+  if ! git rev-parse --verify "$branch" &>/dev/null; then
+    echo "ERROR: Branch does not exist: $branch"
+    echo "File: ship.md:81 - validate_branch_name()"
+    echo ""
+    echo "Available branches:"
+    git branch --list | head -10
+    exit $EXIT_USER_ERROR
+  fi
+
+  echo "✓ Branch validation passed ($branch)"
+  return 0
+}
+
+# 2. Validate PR/MR title format (Conventional Commits)
+validate_title_format() {
+  local title="$1"
+
+  # Empty check
+  if [[ -z "$title" ]]; then
+    echo "ERROR: PR/MR title required"
+    echo "File: ship.md:97 - validate_title_format()"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Input length check BEFORE regex (ReDoS protection)
+  if [[ ${#title} -gt 200 ]]; then
+    echo "ERROR: Title too long (${#title} chars, max 200)"
+    echo "File: ship.md:104 - validate_title_format()"
+    echo ""
+    echo "Conventional Commits titles should be concise"
+    echo "Recommended length: 50-72 characters"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Centralized type definitions (single source of truth)
+  local allowed_types=("feat" "fix" "refactor" "docs" "style" "test" "chore" "perf" "hotfix")
+  local type_regex=$(IFS="|"; echo "${allowed_types[*]}")
+
+  # Conventional Commits format: type(scope): subject (with bounded quantifier)
+  if [[ ! "$title" =~ ^($type_regex)(\([a-z0-9_-]+\))?:[[:space:]].{1,150}$ ]]; then
+    echo "ERROR: Invalid Conventional Commits format"
+    echo "File: ship.md:120 - validate_title_format()"
+    echo ""
+    echo "Expected: <type>(<scope>): <subject>"
+    echo "Got: $title"
+    echo ""
+    echo "Valid types: ${allowed_types[*]}"
+    echo "Example: feat(ui): add user profile editor"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Subject length validation (max 72 characters after type/scope)
+  local subject="${title#*: }"
+  if [[ ${#subject} -gt 72 ]]; then
+    echo "ERROR: Subject too long (${#subject} chars, max 72)"
+    echo "File: ship.md:134 - validate_title_format()"
+    echo ""
+    echo "Subject: $subject"
+    exit $EXIT_USER_ERROR
+  fi
+
+  # Detect command injection attempts (comprehensive)
+  if [[ "$title" =~ [\`\$\(\)\{\}\;\|\>\<\&] ]]; then
+    echo "ERROR: Dangerous characters detected in title"
+    echo "File: ship.md:143 - validate_title_format()"
+    echo ""
+    echo "Security policy: Special shell characters not allowed"
+    echo "Blocked characters: \` \$ ( ) { } ; | > < &"
+    echo ""
+    echo "Example valid title: feat(ui): add user profile editor"
+    exit $EXIT_SECURITY_ERROR
+  fi
+
+  echo "✓ Title format validation passed"
+  return 0
+}
+
+# 3. Validate CLI authentication
+validate_cli_authentication() {
+  local cli_cmd="$1"
+  local platform="$2"
+
+  # Check CLI availability
+  if ! command -v "$cli_cmd" &>/dev/null; then
+    echo "ERROR: $platform CLI not installed ($cli_cmd)"
+    echo "File: ship.md:164 - validate_cli_authentication()"
+    echo ""
+    echo "Installation:"
+    if [[ "$platform" == "github" ]]; then
+      echo "  brew install gh"
+      echo "  gh auth login"
+    else
+      echo "  brew install glab"
+      echo "  glab auth login"
+    fi
+    exit $EXIT_SYSTEM_ERROR
+  fi
+
+  # Check authentication status
+  if ! "$cli_cmd" auth status &>/dev/null; then
+    echo "ERROR: $platform CLI not authenticated"
+    echo "File: ship.md:179 - validate_cli_authentication()"
+    echo ""
+    echo "Authentication required:"
+    echo "  $cli_cmd auth login"
+    echo ""
+    echo "Follow the prompts to authenticate with $platform"
+    exit $EXIT_SYSTEM_ERROR
+  fi
+
+  echo "✓ CLI authentication verified ($cli_cmd)"
+  return 0
+}
+
+# 4. Template secret detection
+detect_template_secrets() {
+  local template_content="$1"
+
+  # Hardcoded secrets patterns (from commit.md)
+  if echo "$template_content" | grep -qiE "(api[_-]?key|password|secret|token|bearer|auth).{0,10}[=:].{8,}"; then
+    echo "WARNING: Possible secret detected in PR/MR template"
+    echo ""
+    echo "Security risk: Secrets in templates are publicly visible"
+    echo "Review template carefully before creating PR/MR"
+    echo ""
+    read -p "Continue anyway? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      echo "PR/MR creation aborted"
+      exit 2
+    fi
+  fi
+
+  return 0
+}
+
+# 5. Safe argument parsing
+# Sanitize input BEFORE array expansion
+ARGUMENTS_SAFE=$(echo "$ARGUMENTS" | tr -d '\n\r\t' | xargs)
+
+# Global validation BEFORE parsing
+if [[ "$ARGUMENTS_SAFE" =~ [\`\$\{\}\(\)] ]]; then
+  echo "ERROR: Dangerous characters in arguments"
+  echo "File: ship.md:207 - Argument Processing"
+  echo ""
+  echo "Security policy: Command substitution and variable expansion not allowed"
+  exit $EXIT_SECURITY_ERROR
+fi
+
+# Safe array expansion
+IFS=' ' read -r -a args <<< "$ARGUMENTS_SAFE"
+BRANCH_NAME="${args[0]}"
+TITLE="${args[*]:1}"
+
+# Validate inputs
+if [[ -n "$BRANCH_NAME" ]]; then
+  validate_branch_name "$BRANCH_NAME"
+fi
+
+if [[ -n "$TITLE" ]]; then
+  validate_title_format "$TITLE"
+fi
+```
+
+**Execution order**:
+1. validate_branch_name "$BRANCH_NAME" (if provided)
+2. validate_title_format "$TITLE" (if provided)
+3. validate_cli_authentication "$CLI_CMD" "$PLATFORM"
+4. detect_template_secrets "$TEMPLATE_CONTENT" (before PR/MR creation)
+
+**Exit codes** (use constants defined at L43-47):
+- EXIT_SUCCESS (0): Success
+- EXIT_USER_ERROR (1): User error (invalid format, branch not found)
+- EXIT_SECURITY_ERROR (2): Security error (path traversal, command injection, secrets detected)
+- EXIT_SYSTEM_ERROR (3): System error (CLI not installed, authentication failed)
+- EXIT_UNRECOVERABLE (4): Unrecoverable error (platform detection failed)
 
 ## Execution Flow
 
@@ -80,23 +316,35 @@ For GitLab:
 
 **Template loading logic:**
 ```bash
-# GitHub template selection
-if [[ -f ".github/pull_request_template.md" ]]; then
-  TEMPLATE=$(cat .github/pull_request_template.md)
-elif [[ -f "$HOME/.github/PULL_REQUEST_TEMPLATE.md" ]]; then
-  TEMPLATE=$(cat "$HOME/.github/PULL_REQUEST_TEMPLATE.md")
-else
-  TEMPLATE="[Auto-generated built-in template]"
-fi
+# Unified template loading function (eliminates GitHub/GitLab duplication)
+load_template() {
+  local platform="$1"
+  local project_template local_template
 
-# GitLab template selection
-if [[ -f ".gitlab/merge_request_template.md" ]]; then
-  TEMPLATE=$(cat .gitlab/merge_request_template.md)
-elif [[ -f "$HOME/.gitlab/merge_request_template.md" ]]; then
-  TEMPLATE=$(cat "$HOME/.gitlab/merge_request_template.md")
-else
-  TEMPLATE="[Auto-generated built-in template]"
-fi
+  # Platform-specific paths
+  if [[ "$platform" == "github" ]]; then
+    project_template=".github/pull_request_template.md"
+    local_template="$HOME/.github/PULL_REQUEST_TEMPLATE.md"
+  else
+    project_template=".gitlab/merge_request_template.md"
+    local_template="$HOME/.gitlab/merge_request_template.md"
+  fi
+
+  # 3-tier fallback: Project → Global → Built-in
+  if [[ -f "$project_template" ]]; then
+    cat "$project_template"
+  elif [[ -f "$local_template" ]]; then
+    cat "$local_template"
+  else
+    echo "[Auto-generated built-in template]"
+  fi
+}
+
+# Usage
+TEMPLATE=$(load_template "$PLATFORM")
+
+# Security check: Detect secrets in template
+detect_template_secrets "$TEMPLATE"
 ```
 
 ### 5. Draft Creation & Verification
@@ -194,22 +442,49 @@ AskUserQuestion({
 ## Automated Pre-Ship Quality Execution
 
 ### Quality Command Execution Flow
+
+**Delegate to /validate command for consistency:**
+
 ```bash
-# 1. Uncommitted changes check
-git status --porcelain
+# 1. Uncommitted changes check (prerequisite, must run first)
+UNCOMMITTED=$(git status --porcelain)
+if [[ -n "$UNCOMMITTED" ]]; then
+  echo "WARNING: Uncommitted changes detected"
+  echo "File: ship.md:448 - Pre-Ship Quality Checks"
+  echo ""
+  echo "$UNCOMMITTED"
+  echo ""
+  read -p "Continue with uncommitted changes? (y/N): " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "PR/MR creation aborted"
+    exit $EXIT_USER_ERROR
+  fi
+fi
 
-# 2. TypeScript validation (if applicable)
-npm run typecheck || echo "❌ TypeScript errors detected"
+# 2. Delegate quality checks to /validate command
+# Benefits:
+# - Single source of truth for quality standards
+# - Automatic updates when /validate improves
+# - Consistent behavior across all commands
+echo "🔍 Running quality checks..."
+SlashCommand("/validate --layers=syntax --auto-fix")
+VALIDATE_EXIT=$?
 
-# 3. Linting validation (if applicable)
-npm run lint || echo "❌ ESLint errors detected"
+if [[ $VALIDATE_EXIT -ne 0 ]]; then
+  echo "❌ Quality checks failed"
+  echo "File: ship.md:465 - Pre-Ship Quality Checks"
+  echo ""
+  echo "Fix errors before creating PR/MR, or use --skip-checks flag"
+  exit $EXIT_USER_ERROR
+fi
 
-# 4. Test execution (if applicable)
-npm run test:run || echo "❌ Tests failed"
-
-# 5. Build verification (if applicable)
-npm run build || echo "❌ Build failed"
+echo "✅ All quality checks passed"
 ```
+
+**Benefits of delegation:**
+- **Maintainability:** Single source of truth (70 lines reduced to 10 lines)
+- **Consistency:** Same quality standards across `/validate`, `/ship`, `/commit`
+- **Evolution:** Automatic improvements when `/validate` is enhanced
 
 ### General Project Examples
 
@@ -276,89 +551,14 @@ glab mr create --draft --title "provided-title" --description "template"
 
 ## Conventional Commits Format
 
-### Type Definitions
-- **feat**: New feature
-- **fix**: Bug fix
-- **refactor**: Refactoring
-- **docs**: Documentation
-- **perf**: Performance improvement
-- **style**: Style changes
-- **test**: Adding tests
-- **chore**: Build/configuration
+**Type definitions are centralized in validate_title_format() function (L116).**
 
-### Examples
+Supported types: `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`, `hotfix`
+
+**Examples:**
 - `feat(auth): implement login functionality`
 - `fix(api): resolve response error handling`
 - `refactor(ui): improve component structure`
-- `docs(readme): add installation instructions`
-- `perf(query): optimize database queries`
-- `test(user): add user registration tests`
-
-## Pre-Ship Quality Checks
-
-### For Node.js/TypeScript Projects
-```bash
-# TypeScript error check
-npm run type-check
-
-# Run linter
-npm run lint
-
-# Run tests
-npm run test
-
-# Build verification
-npm run build
-```
-
-### For Other Projects
-- Execute project CI scripts
-- Run local tests
-- Verify build/compilation
-
-## CLI Commands Reference
-
-### GitHub CLI (gh)
-```bash
-# List PRs
-gh pr list
-
-# View specific PR
-gh pr view <PR-number>
-
-# Open PR in browser
-gh pr view --web <PR-number>
-
-# Mark ready for review (remove draft)
-gh pr ready <PR-number>
-
-# Merge PR
-gh pr merge <PR-number>
-
-# Close PR
-gh pr close <PR-number>
-```
-
-### GitLab CLI (glab)
-```bash
-# List MRs
-glab mr list
-
-# View specific MR
-glab mr view <MR-number>
-
-# Open MR in browser
-glab mr view --web <MR-number>
-
-# Mark ready for review (remove draft)
-glab mr update --ready
-
-# Merge MR
-glab mr merge <MR-number>
-
-# Close MR
-glab mr close <MR-number>
-```
 
 ## Update & Edit
 
@@ -449,22 +649,8 @@ CURRENT_BRANCH=$(git branch --show-current)
 BRANCH_TYPE="${CURRENT_BRANCH%%/*}"
 BRANCH_DESC="${CURRENT_BRANCH#*/}"
 
-# Safe platform detection
-REMOTE_URL=$(git remote get-url origin 2>/dev/null)
-case "$REMOTE_URL" in
-  *github.com*)
-    PLATFORM="github"
-    CLI_CMD="gh"
-    ;;
-  *gitlab*)
-    PLATFORM="gitlab"
-    CLI_CMD="glab"
-    ;;
-  *)
-    echo "ERROR: Unsupported platform"
-    exit 2
-    ;;
-esac
+# Platform detection (use detect_platform() function defined at L18-46)
+read -r PLATFORM CLI_CMD <<< "$(detect_platform)"
 
 # Safe PR/MR creation with heredoc
 if [[ "$PLATFORM" == "github" ]]; then
@@ -499,7 +685,7 @@ If project has `docs/PR_GUIDELINES.md` or `docs/MR_GUIDELINES.md`, refer to thos
 
 ## Command Examples
 
-### Complete Ship Flow Example
+### Example 1: Complete Ship Flow (Interactive Mode)
 ```bash
 # 1. Create branch
 git checkout -b feat/user-profile-edit
@@ -511,17 +697,148 @@ git commit -m "feat(profile): add user profile editing feature"
 # 3. Push to remote
 git push -u origin feat/user-profile-edit
 
-# 4. Create PR/MR (recommended method)
+# 4. Create PR/MR (interactive mode)
 /ship
 
-# Or with arguments
+# Output:
+# ✓ Platform detected: GitHub
+# ✓ Current branch: feat/user-profile-edit
+# ✓ CLI authentication verified (gh)
+# 🔍 Running quality checks in parallel...
+#
+# Quality Check Results:
+#   TypeScript: 0 errors
+#   ESLint: 0 errors
+#   Tests: 0 failures
+#   Build: 0 errors
+#
+# ✅ All quality checks passed
+#
+# [AskUserQuestion prompts for type and scope]
+# ✓ Pull Request created successfully
+# ✓ Status: Draft
+# ✓ URL: https://github.com/org/repo/pull/123
+
+# 5. Mark ready when review-ready
+gh pr ready 123
+```
+
+### Example 2: Direct Creation with Arguments (GitHub)
+
+**Success case:**
+```bash
 /ship feat/user-profile-edit "feat(profile): add user profile editing feature"
 
-# 5. Browser opens automatically for review
+# Output:
+# ✓ Branch validation passed (feat/user-profile-edit)
+# ✓ Title format validation passed
+# ✓ CLI authentication verified (gh)
+# ✓ Template loaded from .github/pull_request_template.md
+# ✅ All quality checks passed
+# ✓ Pull Request created successfully
+# ✓ URL: https://github.com/org/repo/pull/124
+```
 
-# 6. Mark ready when review-ready
-# GitHub: gh pr ready
-# GitLab: glab mr update --ready
+**Error case - Security validation:**
+```bash
+/ship ../../../etc/passwd "feat: malicious PR"
+
+# Output:
+# ERROR: Path traversal detected in branch name: ../../../etc/passwd
+# File: ship.md:61 - validate_branch_name()
+#
+# Security policy: Branch names must not contain '..'
+# Exit code: 2 (Security error)
+```
+
+### Example 3: GitLab MR Creation
+```bash
+# On GitLab repository
+git checkout -b fix/api-timeout-issue
+git add .
+git commit -m "fix(api): resolve timeout in payment processing"
+git push -u origin fix/api-timeout-issue
+
+/ship
+
+# Output:
+# ✓ Platform detected: GitLab
+# ✓ Current branch: fix/api-timeout-issue
+# ✓ CLI authentication verified (glab)
+# ✅ All quality checks passed
+# ✓ Merge Request created successfully
+# ✓ Status: Draft
+# ✓ URL: https://gitlab.com/org/project/-/merge_requests/45
+
+# Mark ready
+glab mr update --ready
+```
+
+### Example 4: Security - CLI Authentication Required
+```bash
+/ship feat/new-feature "feat(ui): add dashboard"
+
+# Output (if not authenticated):
+# ERROR: github CLI not authenticated
+#
+# Authentication required:
+#   gh auth login
+#
+# Follow the prompts to authenticate with github
+# Exit code: 3 (System error)
+
+# Recovery:
+gh auth login
+# [Follow authentication flow]
+/ship feat/new-feature "feat(ui): add dashboard"
+# ✅ Success
+```
+
+### Example 6: Quality Checks Failure
+```bash
+/ship feat/broken-feature "feat(ui): add feature"
+
+# Output:
+# ✓ Branch validation passed (feat/broken-feature)
+# ✓ Title format validation passed
+# ✓ CLI authentication verified (gh)
+# 🔍 Running quality checks in parallel...
+#
+# Quality Check Results:
+#   TypeScript: 5 errors
+#   ESLint: 12 errors
+#   Tests: 3 failures
+#   Build: 2 errors
+#
+# ❌ Quality checks failed (22 issues)
+# Fix errors before creating PR/MR, or use --skip-checks flag
+# Exit code: 1 (User error)
+
+# Fix errors, then retry:
+npm run typecheck  # Fix TS errors
+npm run lint:fix   # Auto-fix ESLint
+npm run test       # Fix failing tests
+/ship feat/broken-feature "feat(ui): add feature"
+# ✅ Success after fixes
+```
+
+### Example 7: Conventional Commits Format Error
+```bash
+/ship feat/user-settings "Add user settings page"
+
+# Output:
+# ✓ Branch validation passed (feat/user-settings)
+# ERROR: Invalid Conventional Commits format
+# Expected: <type>(<scope>): <subject>
+# Got: Add user settings page
+#
+# Valid types: feat fix refactor docs style test chore perf hotfix
+# Example: feat(ui): add user profile editor
+# Exit code: 1 (User error)
+
+# Correct format:
+/ship feat/user-settings "feat(ui): add user settings page"
+# ✅ Success
 ```
 
 ## Important Notes

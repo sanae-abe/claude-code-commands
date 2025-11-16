@@ -9,33 +9,84 @@ model: sonnet
 
 Arguments: $ARGUMENTS
 
-Usage: `/branch [branch-type] [description]`
+## Argument Validation and Sanitization
 
-Examples:
-- `/branch feature user-settings`
-- `/branch fix login-validation`
-- `/branch hotfix security-patch`
-- `/branch` (interactive mode)
+Parse and validate $ARGUMENTS with security-first approach:
 
-## Argument Validation
+```bash
+sanitize_description() {
+  local input="$1"
 
-Parse from $ARGUMENTS:
-- Extract first token as branch-type
-- Extract remaining tokens as description
-- Validate branch-type against allowed list: feature, fix, refactor, docs, chore, hotfix
-- Sanitize description:
-  - Convert to lowercase
-  - Replace spaces with hyphens
-  - Remove special characters: ; | & $ ( ) < > ` \ ' "
-  - Validate final format: ^[a-z]+/[a-z0-9-]+$
+  # Path traversal check
+  if [[ "$input" =~ \.\. ]]; then
+    echo "ERROR [branch.md:sanitize]: Path traversal detected"
+    echo "  Input contains: .."
+    echo "  Reason: Security restriction"
+    exit 2
+  fi
 
-If $ARGUMENTS empty or unclear: use AskUserQuestion for interactive mode
-If validation fails: report expected format and exit
+  # Convert to lowercase
+  local sanitized="${input,,}"
 
-Security requirements:
-- Always quote variables in Bash: git checkout -b "${branch_name}"
-- Never expose absolute file paths in error messages
-- Reject paths containing ../
+  # Replace spaces with hyphens
+  sanitized="${sanitized// /-}"
+
+  # Remove special characters (keep alphanumeric and hyphens)
+  sanitized=$(echo "$sanitized" | tr -cd 'a-z0-9-')
+
+  # Remove leading/trailing hyphens
+  sanitized="${sanitized#-}"
+  sanitized="${sanitized%-}"
+
+  # Collapse multiple consecutive hyphens
+  sanitized=$(echo "$sanitized" | sed 's/-\+/-/g')
+
+  echo "$sanitized"
+}
+
+validate_branch_type() {
+  local branch_type="$1"
+
+  case "$branch_type" in
+    feature|fix|refactor|docs|chore|hotfix)
+      return 0
+      ;;
+    *)
+      echo "ERROR [branch.md:validate]: Invalid branch type"
+      echo "  Input: $branch_type"
+      echo "  Allowed: feature, fix, refactor, docs, chore, hotfix"
+      exit 1
+      ;;
+  esac
+}
+
+# Safe argument parsing with IFS
+IFS=' ' read -r -a args <<< "$ARGUMENTS"
+
+if [[ ${#args[@]} -eq 0 ]]; then
+  # Interactive mode (handled in Execution Flow)
+  BRANCH_TYPE=""
+  DESCRIPTION=""
+else
+  BRANCH_TYPE="${args[0]}"
+  DESCRIPTION="${args[*]:1}"  # All remaining args
+
+  # Validate and sanitize
+  validate_branch_type "$BRANCH_TYPE"
+  DESCRIPTION_SANITIZED=$(sanitize_description "$DESCRIPTION")
+
+  # Create branch name
+  BRANCH_NAME="${BRANCH_TYPE}/${DESCRIPTION_SANITIZED}"
+
+  # Final format validation
+  if [[ ! "$BRANCH_NAME" =~ ^[a-z]+/[a-z0-9-]+$ ]]; then
+    echo "ERROR [branch.md:validate]: Invalid branch name format"
+    echo "  Generated: $BRANCH_NAME"
+    echo "  Expected: {type}/{kebab-case-description}"
+    exit 2
+  fi
+fi
+```
 
 ## Execution Flow
 
@@ -147,22 +198,37 @@ After type selection, prompt for description:
 ### Validation Errors
 
 If branch-type invalid:
-- Report: "Invalid branch type. Allowed: feature, fix, refactor, docs, chore, hotfix"
-- Exit
+```bash
+echo "ERROR [branch.md:validate]: Invalid branch type"
+echo "  Input: $branch_type"
+echo "  Allowed: feature, fix, refactor, docs, chore, hotfix"
+exit 1
+```
 
-If description contains special characters:
-- Report: "Description contains invalid characters. Use only: a-z, 0-9, hyphens"
-- Exit
+If description contains path traversal:
+```bash
+echo "ERROR [branch.md:sanitize]: Path traversal detected"
+echo "  Input contains: .."
+echo "  Reason: Security restriction"
+exit 2
+```
 
 If final format invalid:
-- Report: "Invalid format. Expected: {type}/{kebab-case-description}"
-- Exit
+```bash
+echo "ERROR [branch.md:validate]: Invalid branch name format"
+echo "  Generated: $BRANCH_NAME"
+echo "  Expected: {type}/{kebab-case-description}"
+exit 2
+```
 
 ### Execution Errors
 
 If not in git repository:
-- Report: "Not a git repository. Run 'git init' first"
-- Exit
+```bash
+echo "ERROR [branch.md:git_check]: Not a git repository"
+echo "  Suggestion: Run 'git init' first"
+exit 3
+```
 
 If uncommitted changes detected:
 ```typescript
@@ -186,13 +252,21 @@ Execute based on selection:
 - cancel: Exit
 
 If branch already exists:
-- git checkout -b will fail with clear error
-- Report: "Branch already exists. Suggested alternatives: {name}-v2, {name}-{date}"
-- Exit
+```bash
+# git checkout -b will fail automatically with clear error
+echo "ERROR [branch.md:git_create]: Branch already exists"
+echo "  Branch name: $BRANCH_NAME"
+echo "  Suggestions: ${BRANCH_NAME}-v2, ${BRANCH_NAME}-$(date +%Y%m%d)"
+exit 3
+```
 
 If network issues during push:
-- Report: "Local branch created. Push failed due to network issues"
-- Provide command: `git push -u origin "${branch_name}"`
+```bash
+echo "ERROR [branch.md:git_push]: Push failed due to network issues"
+echo "  Local branch created successfully: $BRANCH_NAME"
+echo "  Retry command: git push -u origin \"${BRANCH_NAME}\""
+exit 3
+```
 
 ### Security
 
@@ -224,45 +298,18 @@ Read: Optional for reading description from file
 # 4: Unrecoverable error - Critical git operation failure
 ```
 
-## Output Format
-
-**Success example**:
-```
-✓ Branch created successfully
-✓ Name: feature/user-settings
-✓ Pushed to origin with upstream tracking
-
-Next steps:
-  1. Make changes to your code
-  2. Commit changes with /commit
-  3. Create PR/MR with /ship
-```
-
-**Error example**:
-```
-ERROR: Invalid branch type
-File: branch.md:validate_branch_type
-
-Reason: Branch type not in allowed list
-Got: "invalid"
-Allowed: feature, fix, refactor, docs, chore, hotfix
-
-Suggestions:
-1. Use /branch feature <description> for new features
-2. Use /branch fix <description> for bug fixes
-3. Use /branch without arguments for interactive mode
-```
-
 ## Examples
 
-Input: `/branch feature user-login`
-Action: Create branch feature/user-login, validate format, execute git commands
+```bash
+# Basic usage
+/branch feature user-login
 
-Input: `/branch fix "Bug in API"`
-Action: Sanitize to fix/bug-in-api, create and push branch
+# With spaces (auto-sanitized to kebab-case)
+/branch fix "Bug in API"  # → fix/bug-in-api
 
-Input: `/branch`
-Action: Interactive mode, prompt for branch type and description
+# Interactive mode (no arguments)
+/branch
 
-Input: `/branch invalid test`
-Action: Report error "Invalid branch type. Allowed: feature, fix, refactor, docs, chore, hotfix"
+# Invalid type (triggers exit 1)
+/branch invalid test
+```

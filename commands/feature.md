@@ -9,26 +9,59 @@ model: sonnet
 
 New feature development: $ARGUMENTS
 
+## Argument Validation and Sanitization
+
+Parse and validate $ARGUMENTS with security-first approach:
+
+```bash
+validate_feature_name() {
+  local input="$1"
+
+  # Empty check - proceed to interactive mode
+  if [[ -z "$input" ]]; then
+    return 0
+  fi
+
+  # Length validation
+  if [[ ${#input} -gt 100 ]]; then
+    echo "ERROR [feature.md:validate]: Feature name too long"
+    echo "  Input length: ${#input} characters"
+    echo "  Maximum: 100 characters"
+    exit 1
+  fi
+
+  # Dangerous character check
+  if [[ "$input" =~ [\;\|\&\$\`\\\"\'../~] ]]; then
+    echo "ERROR [feature.md:validate]: Special characters detected"
+    echo "  Input: $input"
+    echo "  Forbidden: ; | & $ \` \\ \" ' ../ ./ / ~"
+    echo "  Reason: Security restriction"
+    exit 2
+  fi
+
+  # Whitelist validation
+  if [[ ! "$input" =~ ^[a-zA-Z0-9_\ -]+$ ]]; then
+    echo "ERROR [feature.md:validate]: Invalid characters"
+    echo "  Allowed: letters, numbers, spaces, hyphens, underscores"
+    exit 2
+  fi
+
+  echo "$input"
+}
+
+# Execute validation
+FEATURE_NAME=$(validate_feature_name "$ARGUMENTS")
+```
+
 ## Execution Flow
 
-1. Parse and validate arguments from $ARGUMENTS
+1. Parse and validate arguments from $ARGUMENTS with validate_feature_name()
 2. If arguments empty or unclear: use AskUserQuestion to clarify requirements
 3. Use AskUserQuestion to select implementation approach
 4. Use AskUserQuestion to select complexity level
 5. Create TodoWrite with implementation steps based on selections
 6. Guide user through implementation with references to other commands
 7. Report next steps
-
-## Argument Validation
-
-Parse $ARGUMENTS:
-- Strip special characters: remove ; | & $ ` \ " '
-- Validate feature name format: [a-zA-Z0-9-_\s]+ only
-- Maximum length: 100 characters
-- Reject paths containing: ../ ./ / ~
-
-If validation fails: report error with expected format and exit
-If $ARGUMENTS empty: proceed to interactive mode with AskUserQuestion
 
 ## Implementation Approach Selection
 
@@ -89,20 +122,12 @@ Architectural scope (7+ steps):
 
 ## Integration with Other Commands
 
-After feature implementation, guide user to:
+After TodoWrite creation, follow standard implementation flow:
+- Implementation: Direct coding or /implement [task-id] for complex features
+- Quality checks: /validate --layers=syntax,security (mandatory after implementation)
+- Git workflow: /branch → /commit → /ship
 
-Quality validation:
-- /task-validate --layers=all: Run comprehensive quality checks
-- /task-validate --layers=security: Security-focused validation
-
-Git workflow:
-- /branch: Create feature branch with conventional naming
-- /commit: Create conventional commit with proper formatting
-- /pr or /mr: Create pull/merge request with quality checks
-
-Structured implementation:
-- /implement [task-id]: Use tasks.yml-driven implementation for complex features
-- Reference: See CLAUDE.md basic development flow for detailed guidance
+See CLAUDE.md "基本開発フロー > 実装完了後の必須フロー" for details.
 
 ## Error Handling
 
@@ -131,58 +156,25 @@ Report only user-actionable information
 # 4: Unrecoverable error - Critical planning failure
 ```
 
-## Output Format
-
-**Success example**:
-```
-✓ Feature implementation plan created
-✓ Type: ui-component
-✓ Complexity: moderate
-✓ Estimated effort: 4-6 hours
-
-Implementation Steps:
-  1. Analyze requirements and existing code
-  2. Implement core functionality
-  3. Add tests and documentation
-  4. Run quality validation
-
-Next steps:
-  1. Review implementation plan
-  2. Start with /implement or manual implementation
-  3. Run /validate after completion
-```
-
-**Error example**:
-```
-ERROR: Invalid feature name detected
-File: feature.md:validate_arguments
-
-Reason: Feature name contains special characters
-Got: "user-profile; rm -rf /"
-
-Suggestions:
-1. Use only: letters, numbers, spaces, hyphens, underscores
-2. Max 100 characters
-3. Example: "user profile editing feature"
-```
-
 ## Examples
 
-Input: /feature "user profile editing"
-Action: Validate input, guide through implementation type selection, create TodoWrite for profile editing feature
+```bash
+# Basic usage with feature description
+/feature "user profile editing"
 
-Input: /feature "real-time notification system"
-Action: Validate input, guide through complexity selection (likely "complex"), create detailed implementation plan
+# Complex feature (triggers architectural TodoWrite)
+/feature "real-time notification system"
 
-Input: /feature
-Action: Interactive mode, use AskUserQuestion to gather feature requirements first
+# Interactive mode (no arguments)
+/feature
 
-Input: /feature "test; rm -rf /"
-Action: Report error "Special characters (; | & $ \` \\ \" ') are not allowed for security reasons" and exit
+# Security validation (triggers exit 2)
+/feature "test; rm -rf /"
+```
 
 ## Notes
 
-This command focuses on interactive requirement clarification and implementation guidance. For detailed quality checks, use /task-validate. For structured implementation with documentation, use /implement with tasks.yml.
+This command focuses on interactive requirement clarification and implementation guidance. For detailed quality checks, use /validate. For structured implementation with documentation, use /implement with tasks.yml.
 
 Refer to CLAUDE.md basic development flow for comprehensive development practices including:
 - Requirement analysis and planning

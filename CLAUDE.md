@@ -56,7 +56,7 @@
 
 #### ドキュメント駆動実装（tasks.yml使用時）
 
-**前提**: `/implement [task-id]`実行時、tasks.ymlの該当タスクが読み込まれる
+**前提**: `/implement [task-id]` 実行時、tasks.ymlの該当タスクが読み込まれる
 
 **LLM動作**:
 1. `docs`配列の全ドキュメントを事前Read
@@ -70,7 +70,26 @@ docs: ["docs/design.md#SectionName", "docs/api.md#Endpoint"]
 acceptance_criteria: ["基準1", "基準2"]
 ```
 
-**詳細**: `commands/implement.md`
+**Interactive Mode（新機能作成）**:
+
+`/implement "自然言語要件"` 実行時、tasks.ymlに自動追加して実装開始
+
+**動作**:
+1. AskUserQuestion: implementation type（ui/api/logic/infrastructure等）
+2. AskUserQuestion: complexity（simple/moderate/complex/architectural）
+3. tasks.ymlに新規task追加（自動採番）
+4. `/implement task-N` 自動実行（ドキュメント駆動フローに移行）
+
+**例**:
+```bash
+/implement "ユーザープロフィール編集機能"
+# → AskUserQuestion実行
+# → tasks.ymlにtask-N追加
+# → /implement task-N自動実行
+# → docsも自動読込
+```
+
+**詳細**: `commands/implement.md` "Interactive Mode" section
 
 #### 並行開発の判定（最優先で評価）
 
