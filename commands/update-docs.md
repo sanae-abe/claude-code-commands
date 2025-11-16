@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TodoWrite, Task
-argument-hint: [--sync|--validate|--comprehensive] [--scope=critical|important|routine]
+argument-hint: "[--sync|--validate|--comprehensive] [--scope=critical|important|routine]"
 description: Streamlined documentation synchronization and quality validation
 model: sonnet
 ---

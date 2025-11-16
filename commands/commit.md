@@ -1,6 +1,6 @@
 ---
 allowed-tools: AskUserQuestion, TodoWrite
-argument-hint: [message] | --no-verify | --amend
+argument-hint: "[message] | --no-verify | --amend"
 description: Create Conventional Commits with emoji formatting through interactive guidance
 model: sonnet
 ---

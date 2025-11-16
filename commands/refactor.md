@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Grep, Edit, Write, TodoWrite, AskUserQuestion, Task
-argument-hint: [file-path|component-name]
+argument-hint: "[file-path|component-name]"
 description: Safe incremental refactoring workflow with quality validation
 model: sonnet
 ---

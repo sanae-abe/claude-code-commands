@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Grep, Glob, Task
-argument-hint: [feature-name|component-name|concept] [--detailed|--usage|--examples]
+argument-hint: "[feature-name|component-name|concept] [--detailed|--usage|--examples]"
 description: Explain project features, components, and architectural concepts
 model: sonnet
 ---

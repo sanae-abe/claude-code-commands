@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Write, Edit, Grep, TodoWrite, AskUserQuestion, Task
-argument-hint: [bug or issue description]
+argument-hint: "[bug or issue description]"
 description: Universal debugging - systematic diagnosis and fix for any bug severity
 model: sonnet
 ---

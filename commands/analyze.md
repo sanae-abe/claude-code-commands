@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash, Read, Grep, Glob, Task, TodoWrite
-argument-hint: [overview|quality] [--detailed|--quick|--report|--focus=area]
+argument-hint: "[overview|quality] [--detailed|--quick|--report|--focus=area]"
 description: Project health assessment and code quality analysis
 model: sonnet
 ---

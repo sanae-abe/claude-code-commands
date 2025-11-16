@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, TodoWrite, AskUserQuestion
-argument-hint: [feature name or requirements]
+argument-hint: "[feature name or requirements]"
 description: New feature implementation - guided workflow from requirements to implementation
 model: sonnet
 ---
