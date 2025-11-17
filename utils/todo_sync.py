@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Sync tasks from tasks.yml to todos.md
+Sync tasks from tasks.yml to todo.md
 
-Imports pending tasks from tasks.yml and appends new tasks to todos.md
+Imports pending tasks from tasks.yml and appends new tasks to todo.md
 with metadata (priority, effort). Idempotent - can be run multiple times safely.
 """
 
@@ -50,7 +50,7 @@ def load_tasks_from_yaml() -> List[Dict[str, Any]]:
 
 def get_max_task_id() -> int:
     """
-    Get maximum task ID from last 100 lines of todos.md.
+    Get maximum task ID from last 100 lines of todo.md.
 
     This is more efficient than reading all task IDs for large files.
     Assumes task IDs are sequential (task-1, task-2, ...).
@@ -59,7 +59,7 @@ def get_max_task_id() -> int:
         Maximum task ID number (e.g., 5 for task-5), or 0 if no tasks
     """
     try:
-        with open('todos.md', 'r') as f:
+        with open('todo.md', 'r') as f:
             lines = f.readlines()
 
             # Search last 100 lines in reverse (newest tasks are at bottom)
@@ -69,8 +69,8 @@ def get_max_task_id() -> int:
                     return int(match.group(1))
 
     except FileNotFoundError:
-        # Create empty todos.md if not exists
-        Path('todos.md').touch()
+        # Create empty todo.md if not exists
+        Path('todo.md').touch()
 
     return 0
 
@@ -90,7 +90,7 @@ def filter_pending_tasks(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
     """
-    Append new tasks to todos.md with security validation.
+    Append new tasks to todo.md with security validation.
 
     Args:
         new_tasks: List of new tasks to append
@@ -100,7 +100,7 @@ def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
     """
     count = 0
 
-    with open('todos.md', 'a') as f:
+    with open('todo.md', 'a') as f:
         for task in new_tasks:
             try:
                 # Validate task ID (task-N pattern)
@@ -129,7 +129,7 @@ def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
 
 def sync_tasks() -> None:
     """
-    Main sync function: import pending tasks from tasks.yml to todos.md.
+    Main sync function: import pending tasks from tasks.yml to todo.md.
     """
     try:
         # Load tasks from YAML

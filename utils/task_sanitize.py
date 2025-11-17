@@ -3,7 +3,7 @@
 Task Goal Sanitization Utility
 
 Security sanitization for task goals to prevent YAML/Markdown injection attacks.
-Used by /todo sync when importing tasks from tasks.yml to todos.md.
+Used by /todo sync when importing tasks from tasks.yml to todo.md.
 """
 
 import re
@@ -12,7 +12,7 @@ import sys
 
 def sanitize_goal(goal: str) -> str:
     """
-    Sanitize task goal string for safe inclusion in todos.md.
+    Sanitize task goal string for safe inclusion in todo.md.
 
     Security measures:
     1. Remove newlines (prevents Markdown injection)
@@ -24,7 +24,7 @@ def sanitize_goal(goal: str) -> str:
         goal: Raw goal string from tasks.yml
 
     Returns:
-        Sanitized goal string safe for todos.md
+        Sanitized goal string safe for todo.md
     """
     if not goal:
         return ""

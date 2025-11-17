@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Find next incomplete task from todos.md
+Find next incomplete task from todo.md
 
 Identifies the next task to work on and provides structured output for
 Claude to handle /implement integration for big tasks.
@@ -14,18 +14,18 @@ from typing import Optional, Dict, Any
 
 def read_todos() -> list[str]:
     """
-    Read todos.md file.
+    Read todo.md file.
 
     Returns:
-        List of lines from todos.md
+        List of lines from todo.md
 
     Raises:
-        FileNotFoundError: If todos.md not found
+        FileNotFoundError: If todo.md not found
     """
-    if not Path('todos.md').exists():
-        raise FileNotFoundError("todos.md not found")
+    if not Path('todo.md').exists():
+        raise FileNotFoundError("todo.md not found")
 
-    with open('todos.md', 'r') as f:
+    with open('todo.md', 'r') as f:
         return f.readlines()
 
 
@@ -34,7 +34,7 @@ def find_next_incomplete_task(lines: list[str]) -> Optional[str]:
     Find first incomplete task.
 
     Args:
-        lines: Lines from todos.md
+        lines: Lines from todo.md
 
     Returns:
         Next incomplete task line or None if all completed
@@ -51,7 +51,7 @@ def parse_task_info(task_line: str) -> Dict[str, Any]:
     Parse task information from task line.
 
     Args:
-        task_line: Task line from todos.md
+        task_line: Task line from todo.md
 
     Returns:
         Dict with task_id, priority, effort, description
@@ -88,7 +88,7 @@ def display_next_task() -> None:
     Main function: find and display next task with structured output.
     """
     try:
-        # Read todos.md
+        # Read todo.md
         lines = read_todos()
 
         # Find next incomplete task
@@ -113,7 +113,7 @@ def display_next_task() -> None:
             print("Start working on this task")
 
     except FileNotFoundError:
-        print("ERROR: todos.md not found")
+        print("ERROR: todo.md not found")
         print("Run '/todo sync' to import tasks or '/todo add' to create tasks")
         sys.exit(1)
 

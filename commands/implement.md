@@ -527,8 +527,8 @@ with open('tasks.yml', 'w') as f:
 print(f"✅ Task {task['id']} marked as completed")
 PYTHON
 
-# Update todos.md if it exists
-if [ -f "todos.md" ]; then
+# Update todo.md if it exists
+if [ -f "todo.md" ]; then
   python3 << 'PYTHON'
 import re
 import sys
@@ -536,8 +536,8 @@ import sys
 task_id = '$TASK_ID'
 
 try:
-    # Read todos.md
-    with open('todos.md', 'r') as f:
+    # Read todo.md
+    with open('todo.md', 'r') as f:
         lines = f.readlines()
 
     # Find and update #task-N line
@@ -550,16 +550,16 @@ try:
 
     # Write back if updated
     if updated:
-        with open('todos.md', 'w') as f:
+        with open('todo.md', 'w') as f:
             f.writelines(lines)
-        print(f"✅ todos.mdも更新しました: #{task_id}")
+        print(f"✅ todo.mdも更新しました: #{task_id}")
     else:
-        # Task not found in todos.md (not an error)
+        # Task not found in todo.md (not an error)
         pass
 
 except Exception as e:
     # Log warning but don't fail
-    print(f"⚠️  Warning: todos.md更新に失敗しました: {e}", file=sys.stderr)
+    print(f"⚠️  Warning: todo.md更新に失敗しました: {e}", file=sys.stderr)
     print(f"⚠️  次回 /todo sync で修正されます", file=sys.stderr)
     # Continue execution (don't exit)
 PYTHON
@@ -764,7 +764,7 @@ Document References (1):
 
 [Implements unit tests]
 ✅ Task task-2 marked as completed
-✅ todos.mdも更新しました: #task-2
+✅ todo.mdも更新しました: #task-2
 ```
 
 ### Document reference with section extraction
@@ -892,7 +892,7 @@ Recommendation: Update tasks.yml to remove invalid reference
 - `/validate --layers=all` - Multi-layer quality gate validation after implementation
 - `/commit` - Conventional Commits creation after task completion
 - `/ship` - Create PR/MR with task implementation
-- `/todo` - Task management integration (automatic todos.md sync)
+- `/todo` - Task management integration (automatic todo.md sync)
 
 **Task management**:
 - tasks.yml schema: See `~/.claude/schemas/tasks-schema.yml` for valid structure

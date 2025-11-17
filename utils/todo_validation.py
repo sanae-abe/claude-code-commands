@@ -92,7 +92,7 @@ def safe_error_message(error: Exception, context: str) -> str:
 
     Args:
         error: Exception object
-        context: Context description (e.g., "reading todos.md")
+        context: Context description (e.g., "reading todo.md")
 
     Returns:
         Sanitized error message

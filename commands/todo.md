@@ -24,7 +24,7 @@ Lightweight task management for ad-hoc, document-free tasks that don't require f
 - Planned features requiring design/architecture
 - Long-term projects with multiple stakeholders
 
-**Key difference**: /todo manages todos.md (personal, flexible), /implement manages tasks.yml (project-wide, structured).
+**Key difference**: /todo manages todo.md (personal, flexible), /implement manages tasks.yml (project-wide, structured).
 
 ## Implementation Guide
 
@@ -33,14 +33,14 @@ Lightweight task management for ad-hoc, document-free tasks that don't require f
 1. Parse arguments from $ARGUMENTS
 2. Validate and sanitize input (security check using ~/.claude/utils/todo_validation.py)
 3. Determine action: add, complete, uncomplete, remove, list, sync, next, or interactive mode
-4. Locate or create todos.md file in project root
+4. Locate or create todo.md file in project root
 5. Execute requested action (see Commands section)
-6. Update todos.md file if modifications made
+6. Update todo.md file if modifications made
 7. Display results to user
 
 **Special cases**:
 - $ARGUMENTS empty: use AskUserQuestion for interactive mode
-- todos.md not found: create new file with empty task list
+- todo.md not found: create new file with empty task list
 - Validation fails: report error and exit
 
 ### Arguments & Validation
@@ -83,7 +83,7 @@ Validation rules:
 
 **Bash**: Use for date parsing and executing Python validation scripts
 
-**Read/Write/Edit**: todos.md file operations
+**Read/Write/Edit**: todo.md file operations
 
 **Grep**: Search for specific tasks or patterns
 
@@ -91,7 +91,7 @@ Validation rules:
 
 ### File Format
 
-todos.md uses markdown checklist with metadata:
+todo.md uses markdown checklist with metadata:
 
 ```markdown
 - [ ] Task description | Priority: high|medium|low | Context: ui|api|test|docs|build|security | Due: YYYY-MM-DD
@@ -110,7 +110,7 @@ add "description" [options]:
 - **LLM**: Parse description from quoted string
 - **LLM**: Validate with `sanitize_input()` from todo_validation.py
 - **LLM**: Extract --priority, --context, --due options
-- **LLM**: Append new task to todos.md using Edit tool
+- **LLM**: Append new task to todo.md using Edit tool
 - Default: priority=medium, context=none, due=none
 
 **Bash implementation example**:
@@ -140,18 +140,18 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Append to todos.md using Edit tool
+# Append to todo.md using Edit tool
 NEW_TASK="- [ ] $DESCRIPTION"
 [[ -n "$PRIORITY" ]] && NEW_TASK="$NEW_TASK | Priority: $PRIORITY"
 [[ -n "$CONTEXT" ]] && NEW_TASK="$NEW_TASK | Context: $CONTEXT"
 [[ -n "$DUE" ]] && NEW_TASK="$NEW_TASK | Due: $DUE"
-# Use Edit tool to append NEW_TASK to todos.md
+# Use Edit tool to append NEW_TASK to todo.md
 ```
 
 complete N | done N:
 - **LLM**: Parse task number N
-- **LLM**: Read todos.md, mark task N as completed ([x])
-- **LLM**: Update todos.md using Edit tool
+- **LLM**: Read todo.md, mark task N as completed ([x])
+- **LLM**: Update todo.md using Edit tool
 
 **Bash implementation example**:
 ```bash
@@ -166,13 +166,13 @@ if [[ ! "$TASK_NUM" =~ ^[0-9]+$ ]]; then
     exit $EXIT_USER_ERROR
 fi
 
-# Read todos.md using Read tool, get line at index TASK_NUM
+# Read todo.md using Read tool, get line at index TASK_NUM
 # Replace "- [ ]" with "- [x]" at that line
-# Update todos.md using Edit tool with old/new strings
+# Update todo.md using Edit tool with old/new strings
 ```
 
 list [options]:
-- **LLM**: Read todos.md file using Read tool
+- **LLM**: Read todo.md file using Read tool
 - **LLM**: Display all tasks with numbers
 - **LLM**: Apply --filter (priority:X, context:Y) if specified
 - **LLM**: Apply --sort (due, priority) if specified
@@ -180,7 +180,7 @@ list [options]:
 
 **Bash implementation example**:
 ```bash
-# Read todos.md using Read tool
+# Read todo.md using Read tool
 # Store in variable TODOS_CONTENT
 
 # Parse filter options
@@ -212,12 +212,12 @@ done
 
 uncomplete N:
 - **LLM**: Parse task number N
-- **LLM**: Read todos.md, revert task N to incomplete ([ ])
-- **LLM**: Update todos.md using Edit tool
+- **LLM**: Read todo.md, revert task N to incomplete ([ ])
+- **LLM**: Update todo.md using Edit tool
 
 remove N | delete N:
 - **LLM**: Parse task number N
-- **LLM**: Remove task N from todos.md using Edit tool
+- **LLM**: Remove task N from todo.md using Edit tool
 
 next:
 - **LLM implementation**: Execute `python3 ~/.claude/utils/todo_next.py`
@@ -247,9 +247,9 @@ python3 ~/.claude/utils/todo_sync.py
 **Script responsibilities** (DO NOT implement in LLM):
 - Load and validate tasks.yml (YAML parsing)
 - Extract pending tasks with validation
-- O(1) optimization: read last 100 lines of todos.md for max task ID
+- O(1) optimization: read last 100 lines of todo.md for max task ID
 - Sanitize goal text + shlex.quote metadata (prevent injection)
-- Append new tasks to todos.md
+- Append new tasks to todo.md
 
 **Security features**:
 - Task ID validation (task-\d+ pattern)
@@ -296,7 +296,7 @@ except Exception as e:
 Error handling rules:
 - If no write permission: report permission error (todo.md:212), suggest checking directory permissions
 - If invalid arguments: report error with usage example (todo.md:213)
-- If file not found: create new todos.md file (todo.md:214)
+- If file not found: create new todo.md file (todo.md:214)
 - If security validation fails: report error type without exposing system details (todo.md:215)
 - If file too large (>1MB): report size limit error (todo.md:216)
 
@@ -313,7 +313,7 @@ Error codes usage:
 - 0: Success - Task operation completed (todo.md:219)
 - 1: User error - Invalid arguments, permission denied (todo.md:220)
 - 2: Security error - Injection attempt, path traversal detected (todo.md:221)
-- 3: File too large - todos.md exceeds 1MB (todo.md:222)
+- 3: File too large - todo.md exceeds 1MB (todo.md:222)
 - 4: Unrecoverable error - Critical failure (todo.md:223)
 
 Security:
@@ -334,7 +334,7 @@ Input: /todo uncomplete 1
 Action: Revert task 1 to incomplete status
 
 Input: /todo remove 2
-Action: Delete task 2 from todos.md
+Action: Delete task 2 from todo.md
 
 Input: /todo list --filter priority:high --sort due
 Action: List high-priority tasks sorted by due date
