@@ -51,7 +51,7 @@ Parse $ARGUMENTS to extract:
 - Action: first token (add, complete, uncomplete, remove, list, sync, next, interactive)
 - Task description: quoted string for add action
 - Task number: integer for complete, uncomplete, remove actions
-- Options: --priority, --context, --due, --filter, --sort
+- Options: --priority, --tags, --due, --filter, --sort
 
 ### Input Validation
 
@@ -70,7 +70,7 @@ Validation rules:
 - Task descriptions: Unicode normalize (NFKC), limit 4KB bytes, 1000 chars max
 - Task IDs: must match task-\d+ pattern
 - Priority: must be critical|high|medium|low
-- Context: must be ui|api|docs|test|build|security
+- Tags: alphanumeric, underscore, hyphen only; max 32 chars per tag
 
 ### Tool Usage
 
@@ -79,7 +79,7 @@ Validation rules:
 **AskUserQuestion**: Use in interactive mode when $ARGUMENTS empty
 - Primary action selection: add-task, review-list, quick-complete
 - Task priority selection: critical, high, medium, low
-- Task context selection: ui, api, docs, test, build, security
+- Task tags input: free-form text (e.g., "security urgent api")
 
 **Bash**: Use for date parsing and executing Python validation scripts
 
@@ -94,13 +94,16 @@ Validation rules:
 todo.md uses markdown checklist with metadata:
 
 ```markdown
-- [ ] Task description | Priority: high|medium|low | Context: ui|api|test|docs|build|security | Due: YYYY-MM-DD
-- [x] Completed task | Priority: medium | Context: ui | Due: 2025-01-15
+- [ ] Fix auth bug | Priority: high | Due: 2025-01-16 | Created: 2025-01-15 #security #urgent
+- [x] Update README | Priority: medium | Created: 2025-01-14 | Completed: 2025-01-15 #docs
 ```
 
-- Priority: critical, high, medium, low
-- Context: ui, api, docs, test, build, security
-- Date: ISO 8601 (YYYY-MM-DD) or natural language (tomorrow, next week, in N days)
+**Field specification**:
+- Priority: critical, high, medium, low (required)
+- Due: YYYY-MM-DD (optional)
+- Created: YYYY-MM-DD (auto-generated, required)
+- Completed: YYYY-MM-DD (auto-generated on completion, completed tasks only)
+- Tags: #tag1 #tag2 ... (optional, free-form, alphanumeric + underscore + hyphen)
 
 ### Actions
 
@@ -109,9 +112,10 @@ todo.md uses markdown checklist with metadata:
 add "description" [options]:
 - **LLM**: Parse description from quoted string
 - **LLM**: Validate with `sanitize_input()` from todo_validation.py
-- **LLM**: Extract --priority, --context, --due options
+- **LLM**: Extract --priority, --tags, --due options
+- **LLM**: Auto-generate Created field (current date)
 - **LLM**: Append new task to todo.md using Edit tool
-- Default: priority=medium, context=none, due=none
+- Default: priority=medium, tags=none, due=none
 
 **Bash implementation example**:
 ```bash
@@ -119,8 +123,9 @@ add "description" [options]:
 ACTION="add"
 DESCRIPTION=""
 PRIORITY="medium"
-CONTEXT=""
+TAGS=""
 DUE=""
+CREATED=$(date +%Y-%m-%d)
 
 # Extract description (first quoted string)
 if [[ "$ARGUMENTS" =~ \"([^\"]+)\" ]]; then
@@ -134,40 +139,47 @@ python3 -c "from todo_validation import sanitize_input; import sys; sanitize_inp
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --priority=*) PRIORITY="${1#*=}" ;;
-        --context=*) CONTEXT="${1#*=}" ;;
+        --tags=*) TAGS="${1#*=}" ;;
         --due=*) DUE="${1#*=}" ;;
     esac
     shift
 done
 
-# Append to todo.md using Edit tool
-NEW_TASK="- [ ] $DESCRIPTION"
-[[ -n "$PRIORITY" ]] && NEW_TASK="$NEW_TASK | Priority: $PRIORITY"
-[[ -n "$CONTEXT" ]] && NEW_TASK="$NEW_TASK | Context: $CONTEXT"
+# Build task line
+NEW_TASK="- [ ] $DESCRIPTION | Priority: $PRIORITY"
 [[ -n "$DUE" ]] && NEW_TASK="$NEW_TASK | Due: $DUE"
+NEW_TASK="$NEW_TASK | Created: $CREATED"
+# Convert tags to hashtag format (space-separated "tag1 tag2" → "#tag1 #tag2")
+if [[ -n "$TAGS" ]]; then
+    HASHTAGS=$(echo "$TAGS" | sed 's/\b/#/g')
+    NEW_TASK="$NEW_TASK $HASHTAGS"
+fi
 # Use Edit tool to append NEW_TASK to todo.md
 ```
 
 complete N | done N:
 - **LLM**: Parse task number N
 - **LLM**: Read todo.md, mark task N as completed ([x])
+- **LLM**: Add Completed field (current date) after Created field
 - **LLM**: Update todo.md using Edit tool
 
 **Bash implementation example**:
 ```bash
 # Parse task number
 TASK_NUM=$(echo "$ARGUMENTS" | awk '{print $2}')
+COMPLETED=$(date +%Y-%m-%d)
 
 # Validate task number (integer only)
 if [[ ! "$TASK_NUM" =~ ^[0-9]+$ ]]; then
     echo "ERROR: Invalid task number: $TASK_NUM"
-    echo "File: todo.md:152 - Task Number Validation"
+    echo "File: todo.md:161 - Task Number Validation"
     echo "Usage: /todo complete N (where N is a number)"
     exit $EXIT_USER_ERROR
 fi
 
 # Read todo.md using Read tool, get line at index TASK_NUM
-# Replace "- [ ]" with "- [x]" at that line
+# 1. Replace "- [ ]" with "- [x]"
+# 2. Insert " | Completed: $COMPLETED" after Created field
 # Update todo.md using Edit tool with old/new strings
 ```
 
@@ -324,14 +336,15 @@ Security:
 
 ## Examples
 
-Input: /todo add "Fix authentication bug" --priority high --context api --due tomorrow
-Action: Add high-priority API task with tomorrow due date
+Input: /todo add "Fix authentication bug" --priority high --tags "security urgent api" --due tomorrow
+Output: - [ ] Fix authentication bug | Priority: high | Due: 2025-01-16 | Created: 2025-01-15 #security #urgent #api
 
 Input: /todo complete 1
-Action: Mark task 1 as completed
+Before: - [ ] Fix authentication bug | Priority: high | Due: 2025-01-16 | Created: 2025-01-15 #security
+After:  - [x] Fix authentication bug | Priority: high | Due: 2025-01-16 | Created: 2025-01-15 | Completed: 2025-01-15 #security
 
 Input: /todo uncomplete 1
-Action: Revert task 1 to incomplete status
+Action: Revert task 1 to incomplete status, remove Completed field
 
 Input: /todo remove 2
 Action: Delete task 2 from todo.md
@@ -344,3 +357,6 @@ Action: Interactive mode - prompt for action selection
 
 Input: /todo next
 Action: Show next priority task based on due date and priority
+
+Input: /todo sync
+Action: Import pending tasks from tasks.yml to todo.md with Created=sync date, tags from type field

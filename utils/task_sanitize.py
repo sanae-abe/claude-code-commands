@@ -62,6 +62,47 @@ def sanitize_goal(goal: str) -> str:
     return goal
 
 
+def sanitize_tags(tags: str) -> str:
+    """
+    Sanitize tags for safe inclusion in todo.md.
+
+    Security measures:
+    1. Remove special characters (keep alphanumeric, underscore, hyphen)
+    2. Limit tag length (max 32 chars per tag)
+    3. Remove duplicates
+    4. Prevent injection
+
+    Args:
+        tags: Space-separated tags (e.g., "security urgent api")
+
+    Returns:
+        Sanitized tags string safe for todo.md
+    """
+    if not tags:
+        return ""
+
+    tag_list = tags.split()
+    sanitized_tags = []
+
+    for tag in tag_list:
+        # Remove special characters (keep alphanumeric, underscore, hyphen)
+        sanitized_tag = re.sub(r'[^a-zA-Z0-9_-]', '', tag)
+
+        # Skip empty tags
+        if not sanitized_tag:
+            continue
+
+        # Limit length
+        if len(sanitized_tag) > 32:
+            sanitized_tag = sanitized_tag[:32]
+
+        # Prevent duplicates
+        if sanitized_tag not in sanitized_tags:
+            sanitized_tags.append(sanitized_tag)
+
+    return ' '.join(sanitized_tags)
+
+
 def main():
     """CLI interface for testing sanitization."""
     if len(sys.argv) < 2:

@@ -77,15 +77,18 @@ def get_max_task_id() -> int:
 
 def filter_pending_tasks(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Filter tasks with status: pending.
+    Filter tasks with status: pending or completed.
+
+    Note: Despite the name, this now includes both pending and completed tasks
+    to support syncing completed tasks with completed_at timestamps.
 
     Args:
         tasks: All tasks from tasks.yml
 
     Returns:
-        List of pending tasks
+        List of pending and completed tasks
     """
-    return [t for t in tasks if isinstance(t, dict) and t.get('status') == 'pending']
+    return [t for t in tasks if isinstance(t, dict) and t.get('status') in ['pending', 'completed']]
 
 
 def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
@@ -98,7 +101,11 @@ def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
     Returns:
         Number of tasks appended
     """
+    import datetime
+    from task_sanitize import sanitize_tags
+
     count = 0
+    sync_date = datetime.date.today().isoformat()
 
     with open('todo.md', 'a') as f:
         for task in new_tasks:
@@ -109,12 +116,50 @@ def append_new_tasks(new_tasks: List[Dict[str, Any]]) -> int:
                 # Sanitize goal text
                 goal = sanitize_goal(task.get('goal', ''))
 
+                # Get task status (pending or completed)
+                status = task.get('status', 'pending')
+                checkbox = '- [x]' if status == 'completed' else '- [ ]'
+
                 # Quote metadata to prevent injection
                 priority = shlex.quote(str(task.get('priority', 'medium')))
-                effort = shlex.quote(str(task.get('effort', '?')))
 
-                # Write task line
-                line = f"- [ ] #{task_id} {goal} | Priority: {priority} | Effort: {effort}\n"
+                # Build task line
+                line = f"{checkbox} {goal} | Priority: {priority}"
+
+                # Add Due field if exists
+                due_date = task.get('due')
+                if due_date:
+                    # Parse ISO format to YYYY-MM-DD
+                    if isinstance(due_date, str):
+                        due_date = due_date.split('T')[0]  # Remove time part
+                    line += f" | Due: {due_date}"
+
+                # Add Created field (sync date)
+                line += f" | Created: {sync_date}"
+
+                # Add Completed field if task is completed
+                if status == 'completed':
+                    completed_at = task.get('completed_at')
+                    if completed_at:
+                        # Parse ISO format to YYYY-MM-DD
+                        completed_date = completed_at.split('T')[0]
+                    else:
+                        completed_date = sync_date
+                    line += f" | Completed: {completed_date}"
+
+                # Add tags (#task-id #type)
+                tags = [task_id]  # Always include task ID
+                task_type = task.get('type')
+                if task_type:
+                    tags.append(task_type)
+
+                # Sanitize and format tags
+                tags_str = sanitize_tags(' '.join(tags))
+                if tags_str:
+                    hashtags = ' '.join(f'#{tag}' for tag in tags_str.split())
+                    line += f" {hashtags}"
+
+                line += "\n"
                 f.write(line)
 
                 count += 1

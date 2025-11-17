@@ -136,25 +136,37 @@ def validate_priority(priority: str) -> str:
     return priority
 
 
-def validate_context(context: str) -> str:
+def validate_tags(tags: str) -> str:
     """
-    Validate context value.
+    Validate tags (free-form, alphanumeric + underscore + hyphen).
 
     Args:
-        context: Context string
+        tags: Space-separated tags (e.g., "security urgent api")
 
     Returns:
-        Validated context
+        Validated tags string
 
     Raises:
-        ValueError: If context is invalid
+        ValueError: If tags contain invalid characters
     """
-    allowed_contexts = ['ui', 'api', 'docs', 'test', 'build', 'security']
+    if not tags:
+        return ""
 
-    if context not in allowed_contexts:
-        raise ValueError(
-            f"Invalid context: {context} "
-            f"(allowed: {', '.join(allowed_contexts)})"
-        )
+    tag_list = tags.split()
 
-    return context
+    for tag in tag_list:
+        # Alphanumeric, underscore, hyphen only
+        if not re.match(r'^[a-zA-Z0-9_-]+$', tag):
+            raise ValueError(
+                f"Invalid tag: {tag} "
+                f"(allowed: alphanumeric, underscore, hyphen only)"
+            )
+
+        # Max 32 chars per tag
+        if len(tag) > 32:
+            raise ValueError(
+                f"Tag too long: {tag} "
+                f"(max: 32 characters, got: {len(tag)})"
+            )
+
+    return tags

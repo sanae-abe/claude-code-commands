@@ -50,22 +50,26 @@ def parse_task_info(task_line: str) -> Dict[str, Any]:
     """
     Parse task information from task line.
 
+    Format: - [ ] Task | Priority: high | Due: 2025-01-16 | Created: 2025-01-15 #tag1 #tag2
+
     Args:
         task_line: Task line from todo.md
 
     Returns:
-        Dict with task_id, priority, effort, description
+        Dict with task_id, priority, tags, due, created, description
     """
     info = {
         'task_id': None,
         'priority': 'unknown',
-        'effort': 'unknown',
+        'tags': [],
+        'due': None,
+        'created': None,
         'description': task_line,
         'is_big_task': False
     }
 
     # Check for #task-N pattern (big task)
-    match = re.search(r'#(task-\d+)', task_line)
+    match = re.search(r'#(task-[a-z0-9_-]+)', task_line, re.IGNORECASE)
     if match:
         info['task_id'] = match.group(1)
         info['is_big_task'] = True
@@ -75,10 +79,19 @@ def parse_task_info(task_line: str) -> Dict[str, Any]:
     if priority_match:
         info['priority'] = priority_match.group(1)
 
-    # Extract effort
-    effort_match = re.search(r'Effort:\s*([^|]+)', task_line)
-    if effort_match:
-        info['effort'] = effort_match.group(1).strip()
+    # Extract due date
+    due_match = re.search(r'Due:\s*(\d{4}-\d{2}-\d{2})', task_line)
+    if due_match:
+        info['due'] = due_match.group(1)
+
+    # Extract created date
+    created_match = re.search(r'Created:\s*(\d{4}-\d{2}-\d{2})', task_line)
+    if created_match:
+        info['created'] = created_match.group(1)
+
+    # Extract all tags
+    tags = re.findall(r'#([a-zA-Z0-9_-]+)', task_line)
+    info['tags'] = tags
 
     return info
 
@@ -105,7 +118,10 @@ def display_next_task() -> None:
             # Big task - output structured info for Claude to handle
             print(f"NEXT_TASK_ID:{info['task_id']}")
             print(f"PRIORITY:{info['priority']}")
-            print(f"EFFORT:{info['effort']}")
+            if info['due']:
+                print(f"DUE:{info['due']}")
+            if info['tags']:
+                print(f"TAGS:{','.join(info['tags'])}")
             print(f"DESCRIPTION:{next_task}")
         else:
             # Lightweight task - just display
