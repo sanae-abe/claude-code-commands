@@ -532,6 +532,7 @@ if [ -f "todo.md" ]; then
   python3 << 'PYTHON'
 import re
 import sys
+import datetime
 
 task_id = '$TASK_ID'
 
@@ -544,7 +545,23 @@ try:
     updated = False
     for i, line in enumerate(lines):
         if f'#{task_id}' in line and '- [ ]' in line:
-            lines[i] = line.replace('- [ ]', '- [x]')
+            # 1. Replace checkbox
+            updated_line = line.replace('- [ ]', '- [x]')
+
+            # 2. Add Completed field after Created field
+            completed_date = datetime.date.today().isoformat()
+
+            if 'Created:' in updated_line:
+                # Find position to insert Completed field
+                if '#' in updated_line:
+                    # Has tags: insert before first tag
+                    parts = updated_line.split('#', 1)
+                    updated_line = f"{parts[0].rstrip()} | Completed: {completed_date} #{parts[1]}"
+                else:
+                    # No tags: append at end
+                    updated_line = updated_line.rstrip('\n') + f" | Completed: {completed_date}\n"
+
+            lines[i] = updated_line
             updated = True
             break
 
