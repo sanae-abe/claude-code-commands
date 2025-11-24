@@ -367,11 +367,35 @@ npx vite-bundle-visualizer  # or webpack-bundle-analyzer
 
 ## Styling
 
+### CSS Frameworks
+
 - **Tailwind CSS**: Utility-first, fast (Modern projects, recommended)
 - **CSS Modules**: Lightweight, scoped (Simple projects)
 - **Panda CSS**: Type-safe, zero-runtime (TypeScript-heavy)
 - **StyleX**: Meta's solution, atomic (Large-scale)
 - **Styled-components**: Legacy CSS-in-JS (Existing projects only)
+
+### CSS Coding Standards
+
+**包括的なCSS規約**: [CSS Coding Standards](./css-coding-standards.md)
+
+**主要ルール**:
+- `:hover` は `@media (any-hover: hover)` で囲む（タッチデバイス対応）
+- `:focus-visible` 必須（アクセシビリティ）
+- `prefers-reduced-motion` 尊重（前庭障害・てんかん対応）
+- CSS変数必須（デザイントークン）、フォールバック値付き
+- `rem` 単位推奨（ユーザー設定尊重）
+- `transition: all` 禁止（個別プロパティ指定）
+- `outline: none` 絶対禁止（アクセシビリティ違反）
+
+**命名規則**:
+- 状態: `is-active`, `is-disabled`（is- Prefix）
+- 条件: `has-icon`, `has-image`（has- Prefix）
+- ユーティリティ: `u-pc-only`, `u-sp-only`（u- Prefix）
+- Vueコンポーネント: `ProductCard`（PascalCase）
+- BEM Modifier（`--`）: 禁止（is-/has- Prefixに移行）
+
+**詳細**: [~/.claude/stacks/css-coding-standards.md](./css-coding-standards.md)
 
 ## Testing
 

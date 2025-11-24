@@ -219,7 +219,7 @@ cldev lr problems
 
 ### 学習記録の保存場所
 
-`~/.claude/learning-sessions/*.md`
+`~/.claude/learnings/*.md`
 
 ## よく使うコマンドの組み合わせ
 

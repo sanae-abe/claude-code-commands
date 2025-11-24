@@ -226,12 +226,15 @@ ELSE:
 - 失敗報告形式: "ERROR: [理由]" で開始
 - 実装ファイル: [変更対象ファイルリスト]（実装系agentのみ）
 
-**Agent完了時の検証フロー**:
+**Agent完了時の検証フロー**（必須実行）:
 
 ```python
+# Step 1: エラー出力の確認（最優先）
 IF agent出力に "ERROR:" 含む:
     作業停止 → ユーザー報告 → 再実行判断
+    SKIP 以下の検証
 
+# Step 2: Agent種別に応じた検証
 ELIF subagent_type == "Explore":
     IF 出力に正規表現 `[^:]+:\d+` マッチあり:
         成功 → 次タスク続行
@@ -239,10 +242,42 @@ ELIF subagent_type == "Explore":
         Grep/Glob直接実行に切替
 
 ELSE:  # 実装系・最適化系agent
-    IF 期待ファイルが実在:
-        成功 → code-reviewer起動（実装の場合）
-    ELSE:
-        検証失敗 → ユーザー報告
+    # Step 3: 期待成果物の実在確認（必須）
+    期待ファイルリスト = prompt内で指定した変更対象ファイル
+
+    FOR each 期待ファイル IN 期待ファイルリスト:
+        IF ファイルが実在しない:
+            検証失敗 → ユーザーに報告:
+                "Agent実行後の検証失敗: {ファイルパス} が作成されていません"
+            RETURN  # 以降の処理をスキップ
+
+    # Step 4: 型チェック・動作確認（ファイル実在確認後）
+    IF 実装系agent（refactoring-specialist, frontend-developer等）:
+        型チェック実行（言語に応じたコマンド）
+        IF 新規エラー検出:
+            ユーザーに報告 → 修正判断
+        ELSE:
+            開発サーバー動作確認（該当する場合）
+
+    # Step 5: code-reviewer起動（実装完了時）
+    IF 実装完了 AND 型エラーなし:
+        code-reviewer agent起動（PROACTIVE）
+```
+
+**検証の具体例**:
+
+```typescript
+// 悪い例：Agent報告を鵜呑みにする
+agent.execute("components/Foo.vue作成")
+// ✗ ファイル実在確認なし → 報告と実態が乖離する可能性
+
+// 良い例：検証フロー実行
+agent.execute("components/Foo.vue作成")
+IF NOT file_exists("components/Foo.vue"):
+    報告: "Agent実行後の検証失敗: components/Foo.vue が作成されていません"
+    手動で作成 OR Agent再実行
+ELSE:
+    型チェック実行 → 動作確認 → code-reviewer起動
 ```
 
 **Agent報告の簡潔化**:
@@ -489,11 +524,18 @@ development_methodology: tdd  # 開発手法（tdd / test-after）デフォル�
 - `~/.claude/stacks/data-science.md` - Data Science開発
 - `~/.claude/stacks/rust-cli.md` - Rust CLI開発
 - `~/.claude/stacks/shell-cli.md` - Shell CLI開発（POSIX準拠の完全基準）
+- `~/.claude/stacks/css-coding-standards.md` - CSS規約（アクセシビリティ・パフォーマンス重視）
 
 ### 設計・開発ガイドライン
 
-スラッシュコマンド開発時の基準：
+**スラッシュコマンド開発**:
 - `~/.claude/stacks/slash-command-design.md` - LLM最適化されたコマンド設計指針
+
+**CSS開発**:
+- `~/.claude/stacks/css-coding-standards.md` - 包括的CSS規約
+- `~/.claude/stacks/.stylelintrc.json` - Stylelint設定（共有用）
+- `~/.claude/stacks/.prettierrc` - Prettier設定（共有用）
+- `~/.claude/stacks/README-css-configs.md` - CSS設定ファイル使用ガイド
 
 
 ---
