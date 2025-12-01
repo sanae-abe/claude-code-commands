@@ -189,14 +189,37 @@ ELIF タスク種別 == "CLI実装・スクリプト作成・自動化ツール"
         python-pro agent
 
 # 10. 技術スタック別実装agent
-ELIF tech_stack設定あり:
+ELIF tech_stack設定あり OR tech_stack自動検出成功:
     # プロジェクト/.claude/CLAUDE.md の tech_stack を参照
-    IF tech_stack == "frontend-web":
+    # OR 以下のファイルから自動検出:
+    #   - package.json → frontend-web / fullstack-developer
+    #   - Cargo.toml → rust-pro
+    #   - go.mod → golang-pro
+    #   - requirements.txt, pyproject.toml → python-pro
+    #   - composer.json → php-pro
+    #   - Gemfile → ruby-pro
+
+    # 自動検出時の判定ロジック:
+    # 1. プロジェクトルートでファイル存在確認（Glob "**/package.json" 等）
+    # 2. 検出結果からagent選択
+    # 3. 複数検出時は優先度: package.json > Cargo.toml > go.mod > pyproject.toml
+
+    IF tech_stack == "frontend-web" OR package.json検出:
         frontend-developer OR react-specialist/vue-expert
     ELIF tech_stack == "backend-api":
         backend-developer OR (python-pro/golang-pro/rust-pro)
     ELIF tech_stack == "mobile-app":
         mobile-developer OR ios-developer
+    ELIF Cargo.toml検出:
+        rust-pro agent
+    ELIF go.mod検出:
+        golang-pro agent
+    ELIF (requirements.txt OR pyproject.toml)検出:
+        python-pro agent
+    ELIF composer.json検出:
+        php-pro agent
+    ELIF Gemfile検出:
+        ruby-pro agent
     ELSE:
         fullstack-developer
 

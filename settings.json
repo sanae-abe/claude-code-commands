@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/maintenance/startup-maintenance.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
@@ -38,7 +48,7 @@
     "type": "command",
     "command": "~/.claude/statusline-command.sh"
   },
-  "alwaysThinkingEnabled": true,
+  "alwaysThinkingEnabled": false,
   "tool": {
     "Read": "approve",
     "Grep": "approve",
@@ -121,5 +131,18 @@
   },
   "maxTokens": 100000,
   "autoSave": false,
-  "telemetry": false
+  "telemetry": false,
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@zereight/mcp-gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "805832iCRG8cLC1uPtuxtfd-qv1G86MQp1Om5lCA.01.0y0jai43b",
+        "GITLAB_URL": "https://rendezvous.m3.com"
+      }
+    }
+  }
 }
